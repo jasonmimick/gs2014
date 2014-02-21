@@ -1,0 +1,2998 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-02-21 15:45:59">
+<Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
+<Description>
+Interfaces with the Apple Push Notification Service</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>Ens.BusinessOperation</Super>
+<TimeChanged>63239,38207.527104</TimeChanged>
+<TimeCreated>62998,69768.114252</TimeCreated>
+
+<Property name="NotificationProtocol">
+<Description>
+APNS Notification to use</Description>
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="DISPLAYLIST" value=",Simple,Enhanced,Modern"/>
+<Parameter name="VALUELIST" value=",simple,enhanced,modern"/>
+</Property>
+
+<Property name="PushServerAddress">
+<Description>
+APNS Push Server name/address</Description>
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="1024"/>
+</Property>
+
+<Property name="PushServerPort">
+<Description>
+APNS Push Server port</Description>
+<Type>%String</Type>
+<Required>1</Required>
+</Property>
+
+<Property name="SSLConfig">
+<Description>
+APNS SSL Configuration</Description>
+<Type>%String</Type>
+<Required>1</Required>
+</Property>
+
+<Property name="ConnectTimeout">
+<Description>
+Connection timeout</Description>
+<Type>%Integer</Type>
+<InitialExpression>30</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Property name="ResponseTimeout">
+<Description>
+APNS Message Response timeout</Description>
+<Type>%Integer</Type>
+<InitialExpression>5</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Property name="Device">
+<Type>%String</Type>
+<Internal>1</Internal>
+<Transient>1</Transient>
+</Property>
+
+<Property name="Adapter">
+<Type>Ens.OutboundAdapter</Type>
+</Property>
+
+<Parameter name="INVOCATION">
+<Default>Queue</Default>
+</Parameter>
+
+<Parameter name="SETTINGS">
+<Default>PushServerAddress,PushServerPort,ConnectTimeout,ResponseTimeout,SSLConfig,NotificationProtocol</Default>
+</Parameter>
+
+<Parameter name="BUFFERSIZE">
+<Type>%Integer</Type>
+<Default>16384</Default>
+</Parameter>
+
+<Parameter name="DEVICETOKENLENGTH">
+<Type>%Integer</Type>
+<Default>32</Default>
+</Parameter>
+
+<Parameter name="SERVICETYPE">
+<Type>%String</Type>
+<Default>APNS</Default>
+</Parameter>
+
+<Method name="PushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	If pRequest.Service'=..#SERVICETYPE {
+		Quit $$$ERROR($$$EnsZenCloudMessagingErrIncompatibleNotificationType,pRequest.Service,..#SERVICETYPE)
+	} Else {
+		$$$TRACE("..NotificationProtocol="_..NotificationProtocol)
+		$$$TRACE("..SSLConfig="_..SSLConfig)
+		$$$TRACE("PushServerAddress:PushServerPort="_..PushServerAddress_":"_..PushServerPort)
+		Quit $CASE(..NotificationProtocol,
+					  "simple":..SimplePushNotification(pRequest,.pResponse),
+					"enhanced":..EnhancedPushNotification(pRequest,.pResponse),
+					  "modern":..ModernPushNotification(pRequest,.pResponse),
+					          :$$$ERROR($$$EnsZenCloudMessagingErrNotificationProtocolNotSupported,..NotificationProtocol))
+	}
+]]></Implementation>
+</Method>
+
+<Method name="SimplePushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+#define I16N(%n) $RE($ZWC(%n))
+	
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tMsg As %String
+		#dim tReply As %String
+		#dim tPayload As %String
+		#dim tDeviceToken As %String
+		#dim tDeviceTokenData As %Binary
+		
+		Set tSC = ..ConstructAPNSPayload(pRequest,.tPayload)
+		Quit:$$$ISERR(tSC)
+		
+		// Grab the device token
+		Set tDeviceToken = pRequest.Identifiers.GetAt(1)
+		
+		// Validate it
+		Set tSC = ..PackDeviceToken(tDeviceToken,.tDeviceTokenData)
+		Quit:$$$ISERR(tSC)
+		
+		// This is the Simple Notification Format (Legacy)
+		Set tMsg = $C(0)
+				   _ $$$I16N($L(tDeviceTokenData))	// DeviceToken length (network byte order)
+				   _ tDeviceTokenData  				// 32-binary bytes
+				   _ $$$I16N($L(tPayload))			// Payload length (network byte order)
+				   _ tPayload
+
+		Set tSC = ..DoMessageIO(tMsg)
+
+		// NOTE: With the Simple Notification Format, there is NO response.  If there
+		//       is some kind of error, then the connection will be severed.
+		
+		If $$$ISERR(tSC) {
+			// Most likely a TCP disconnect ... indicative of some message failure
+			Set tSC = $$$EMBEDSC($$$ERROR($$$EnsZenCloudMessagingErrAPNSPushNotificationFailed),tSC)
+			
+			// Make sure we disconnect
+			Do ..Disconnect()
+			
+			Quit
+		}
+		
+		// Presumable, that worked ...
+		Set tSC = pRequest.NewResponse(.pResponse)
+		Quit:$$$ISERR(tSC)
+		
+		// Remember when we actually delivered it
+		Set pResponse.DeliveredAtUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)
+
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="EnhancedPushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+#define I32N(%n) $RE($ZLC(%n))
+#define I16N(%n) $RE($ZWC(%n))
+#define N32I(%n) $ZLA($RE(%n))
+	
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tMsg As %String
+		#dim tReply As %String
+		#dim tPayload As %String
+		#dim tExpiresUTC As %Integer
+		#dim tDeviceToken As %String
+		#dim tDeviceTokenData As %Binary
+		
+		Set tSC = ..ConstructAPNSPayload(pRequest,.tPayload)
+		Quit:$$$ISERR(tSC)
+		
+		// Grab the device token
+		Set tDeviceToken = pRequest.Identifiers.GetAt(1)
+		
+		// Validate it
+		Set tSC = ..PackDeviceToken(tDeviceToken,.tDeviceTokenData)
+		Quit:$$$ISERR(tSC)
+
+		// Convert the local timestamp into a UNIX UTC based timestamp (in whole seconds)
+		Set tExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).TimeStampToUnix(pRequest.ExpiresUTC,1)\1
+		
+		// This is the Enhanced Notification Format (Legacy)
+		Set tMsg = $C(1)
+				   _ $$$I32N(pRequest.%Id())		// Request Id
+				   _ $$$I32N(tExpiresUTC)			// Expiration date (in unix time)
+				   _ $$$I16N($L(tDeviceTokenData))	// DeviceToken length (network byte order)
+				   _ tDeviceTokenData		   		// 32-binary bytes
+				   _ $$$I16N($L(tPayload))			// Payload length (network byte order)
+				   _ tPayload
+
+		Set tSC = ..DoMessageIO(tMsg,.tReply,6)
+		If $$$ISERR(tSC) {
+			// Most likely a TCP disconnect ... indicative of some message failure
+			Set tSC = $$$EMBEDSC($$$ERROR($$$EnsZenCloudMessagingErrAPNSPushNotificationFailed),tSC)
+			
+			// Make sure we disconnect
+			Do ..Disconnect()
+			
+			Quit
+		}
+
+		If $L(tReply)>0 {
+			#dim tCmdCode As %Integer    = $A(tReply,1)
+			#dim tStatusCode As %Integer = $A(tReply,2)
+			#dim tIdent As %Integer      = $$$N32I($E(tReply,3,6))
+			
+			// Command code is always 8
+			If $L(tReply)=6,tCmdCode=8 {
+				
+				If tStatusCode'=0 {
+					// Enhanced notification failed ...
+					#dim tReason As %String
+					Set tReason = $CASE(tStatusCode,
+										1:"Processing Error",
+										2:"Missing device token",
+										3:"Missing topic",
+										4:"Missing payload",
+										5:"Invalid token size",
+										6:"Invalid topic size",
+										7:"Invalid payload size",
+										8:"Invalid token",
+										10:"Shutdown",
+										:"Unknown "_tStatusCode)
+										
+					Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrAPNSPushNotificationFailedWithReason,tReason)
+				}
+			} Else {
+				Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrAPNSInvalidResponse,tReply)
+			}
+			
+			Quit:$$$ISERR(tSC)
+		}
+		
+		// Presumably, that worked ...
+		Set tSC = pRequest.NewResponse(.pResponse)
+		Quit:$$$ISERR(tSC)
+		
+		// Remember when we actually delivered it
+		Set pResponse.DeliveredAtUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="ModernPushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[	Quit $$$ERROR($$$NotImplemented)
+]]></Implementation>
+</Method>
+
+<XData name="MessageMap">
+<Data><![CDATA[
+<MapItems>
+	<MapItem MessageType="EnsLib.ZenCloudMessaging.NotificationRequest"> 
+		<Method>PushNotification</Method>
+	</MapItem>
+</MapItems>
+]]></Data>
+</XData>
+
+<Method name="ConstructAPNSPayload">
+<Description>
+Build the APNS JSON payload from the message</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pPayload:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tPayloadData
+		
+		If (pRequest.SoundNotification="")
+			&& (pRequest.AlertNotification="")
+			&& (pRequest.BadgeNotification="")
+			&& (pRequest.Data.Count() = 0) {
+				
+			// Must have at least one of these properties set ...
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrInvalidNotification)
+			Quit
+		}
+		
+		Set:pRequest.SoundNotification'="" tPayloadData("aps", "sound") = pRequest.SoundNotification
+		Set:pRequest.AlertNotification'="" tPayloadData("aps", "alert") = pRequest.AlertNotification
+		Set:pRequest.BadgeNotification'="" tPayloadData("aps", "badge") = pRequest.BadgeNotification
+		Set:pRequest.UrlNotification'="" tPayloadData("zenmobile", "url") = pRequest.UrlNotification
+		
+		#dim tKey As %String = ""
+		#dim tValue As %String
+		For {
+			Set tValue = pRequest.Data.GetNext(.tKey)
+			Quit:tKey=""
+			
+			Set tPayloadData("data",tKey) = tValue
+		}
+		
+		// Convert the array to JSON
+		Set pPayload = ##class(EnsLib.ZenCloudMessaging.Util).ConvertArrayToJSON(.tPayloadData)
+
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="DoMessageIO">
+<FormalSpec><![CDATA[pSend:%String,&pRecv:%String,pRecvSize:%Integer=0]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	#dim tIO As %String
+	Set tIO=$IO,tSC=$$$OK,$ZT="Trap"
+	Do {
+		Use ..Device
+		Write pSend,*-3  // Write the message and flush it
+		
+		If pRecvSize>0 {
+			// Read a response ... annoyingly, there is no response if the message was accepted!
+			Read pRecv#pRecvSize:..ResponseTimeout
+			
+			If '$TEST {
+				// No response ... notification was ok
+				Set pRecv = ""
+			}
+		}
+
+	} While (0)
+Exit
+	If tIO'=$IO Use tIO
+	
+	Quit tSC
+Trap
+	Set $ZT=""
+	// Handle <READ> and <WRITE> errors as a disconnect
+	If "<WRITE><READ>"[($P($ZE,">")_">") {
+		#dim tSSLError As %String = $system.Security.Users.SSLGetLastError()
+		If tSSLError'="" {
+			// SSL Failed ...
+			Set tSC=$$$ERROR($$$SSLHandShakeFailed,tSSLError)
+		} Else {
+			Set tSC=$$$ERROR($$$EnsZenCloudMessagingErrAPNSConnectionTerminated)
+		}
+		Set tSC=$$$EMBEDSC(tSC,$$$ERROR($$$CacheError,$ZE))
+	} Else {
+		Set tSC=$$$EnsSystemError
+	}
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="Connect">
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	#dim tIO As %String
+	Set tIO=$IO,tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tDevice As %String = ""
+		#dim tSSLError As %String
+		
+		// Build the device name
+		Set tDevice="|TCP|"_..PushServerPort_"|"_$P($J,":")
+		
+		// Open the device
+		Open tDevice:(..PushServerAddress:..PushServerPort:"S"::..#BUFFERSIZE:..#BUFFERSIZE:/TCPNOXY:/SSL=..SSLConfig):..ConnectTimeout
+
+		// Check for connection timeout		
+		If '$TEST {
+			Set tSC=$$$ERROR($$$EnsErrOutConnectExpired,..ConnectTimeout,"TCP/SSL",..PushServerAddress_":"_..PushServerPort)
+			Quit
+		}
+		
+		Use tDevice
+		
+		Set tSSLError = $system.Security.Users.SSLGetLastError()
+		If tSSLError'="" {
+			Set tSC=$$$ERROR($$$SSLHandShakeFailed,tSSLError)
+			Quit
+		}
+		
+		Set ..Device = tDevice
+	}
+	While (0)
+Exit
+	// Restore the IO device
+	If tIO '= $IO Use tIO
+	
+	If $$$ISERR(tSC) {
+		// Wrap the error up into a general connection failed error
+		Quit $$$EMBEDSC($$$ERROR($$$EnsZenCloudMessagingErrAPNSConnectionFailed,..PushServerAddress,..PushServerPort),tSC)
+	} Else {
+		Quit $$$OK
+	}
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="Disconnect">
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	#dim tDevice As %String
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		
+		If ..Device'="" {
+			Close ..Device
+			Set ..Device = ""
+		}
+	}
+	While (0)
+Exit	
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="OnInit">
+<Description>
+This user callback method is called via initConfig() from %OnNew() or in the case of SOAP Services from OnPreSOAP()</Description>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+
+		// TODO: Implement modern push notification support
+		If ..NotificationProtocol = "modern" {
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrNotificationProtocolNotSupported,..NotificationProtocol)
+			Quit
+		}
+
+		// Now, go and connect
+		Set tSC = ..Connect()
+	}
+	While (0)
+Exit	
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="OnTearDown">
+<Description>
+This user callback method is called from %OnClose()</Description>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status = ..Disconnect()
+	
+	// We probably don't care about any disconnect errors
+	
+	Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="PackDeviceToken">
+<Description>
+Pack the token string into a 32-byte binary buffer</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pToken:%String,&pTokenData:%Binary]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tIndex As %Integer = 1
+	
+	If $L(pToken)'=(..#DEVICETOKENLENGTH * 2) {
+		Quit $$$ERROR($$$EnsZenCloudMessagingErrInvalidDeviceToken)
+	}
+	
+	Set pTokenData = ""
+	
+	While (tIndex < $L(pToken)) {
+		Set pTokenData = pTokenData _ $C($ZHEX($E(pToken,tIndex,tIndex+1)))
+		Set tIndex = tIndex + 2
+	}
+	
+	Quit $$$OK
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.AppService">
+<Description>
+ebXML Test Service</Description>
+<IncludeCode>Ensemble,EnsZenCloudMessagingErrors</IncludeCode>
+<Super>Ens.BusinessService</Super>
+<TimeChanged>63237,54038</TimeChanged>
+<TimeCreated>61136,29267.893199</TimeCreated>
+
+<Property name="Target">
+<Description>
+Target to route inbound messages to</Description>
+<Type>Ens.DataType.ConfigName</Type>
+</Property>
+
+<Property name="Timeout">
+<Description>
+Timeout for dispatch (so we don't hold up the HTTP service too long or hang up a production shutdown)</Description>
+<Type>%Integer</Type>
+<InitialExpression>25</InitialExpression>
+</Property>
+
+<Parameter name="SETTINGS">
+<Description>
+Settings</Description>
+<Type>%String</Type>
+<Default>Target,Timeout</Default>
+</Parameter>
+
+<Method name="OnProcessInput">
+<Description>
+Authors of BusinessService implements this method to receive incoming data</Description>
+<FormalSpec><![CDATA[pInput:%RegisteredObject,*pOutput:%RegisteredObject,&pHint:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="ItsATrap"
+	Do {
+		#dim tTarget As Ens.DataType.ConfigName
+		#dim tTimeout As %Integer
+		
+		Set tTarget = ..Target
+		Set tTimeout = ..Timeout
+		
+		// Check for a target
+		If tTarget="" {
+			Set tSC = $$$EnsError($$$EnsErrTargetNotSpecified,"Target")
+			Quit
+		}
+				
+		// Now dispatch with timeout
+		Set tSC = ..SendRequestSync(tTarget,pInput,.pOutput,tTimeout)
+		Quit:$$$ISERR(tSC)
+		
+		// Done!
+		
+	} While (0)
+Exit
+	Quit tSC
+ItsATrap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="SendSync">
+<Description>
+Dispatch the ebXML request to a business service</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pRequest:Ens.Request,&pResponse:Ens.Response,pConfigName:Ens.DataType.ConfigName=..%ClassName(1),pHint:%String=""]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="ItsATrap"
+	Do {
+		#dim tService As Ens.BusinessService
+		
+		If $G($$$EnsRuntime("Name"))="" {
+			Set tSC=$$$EnsError($$$EnsErrProductionNotRunning)
+			Quit
+		}
+		
+		// Construct the business service
+		Set tSC = ##class(Ens.Director).CreateBusinessService(pConfigName,.tService)
+		Quit:$$$ISERR(tSC)
+	
+		// Now, process it
+		Set tSC = tService.ProcessInput(pRequest,.pResponse,pHint)
+		Quit:$$$ISERR(tSC)
+		
+	} While (0)
+Exit
+	Quit tSC
+ItsATrap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.GCM.Operation">
+<Description>
+Interfaces with the Google Cloud Messaging Service</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>Ens.BusinessOperation</Super>
+<TimeChanged>63237,58550.73539</TimeChanged>
+<TimeCreated>62998,69768.114252</TimeCreated>
+
+<Property name="NotificationProtocol">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="DISPLAYLIST" value=",HTTP,XMPP"/>
+<Parameter name="VALUELIST" value=",http,xmpp"/>
+</Property>
+
+<Property name="PushServer">
+<Type>%String</Type>
+<InitialExpression>"https://android.googleapis.com/gcm/send"</InitialExpression>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="2048"/>
+</Property>
+
+<Property name="SSLConfig">
+<Type>%String</Type>
+</Property>
+
+<Property name="Timeout">
+<Type>%Integer</Type>
+<InitialExpression>30</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Property name="Adapter">
+<Type>Ens.OutboundAdapter</Type>
+</Property>
+
+<Property name="HttpRequest">
+<Type>%Net.HttpRequest</Type>
+</Property>
+
+<Parameter name="INVOCATION">
+<Default>Queue</Default>
+</Parameter>
+
+<Parameter name="SETTINGS">
+<Default>NotificationProtocol,PushServer,SSLConfig,Timeout</Default>
+</Parameter>
+
+<Parameter name="SERVICETYPE">
+<Type>%String</Type>
+<Default>GCM</Default>
+</Parameter>
+
+<Method name="PushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	If pRequest.Service'=..#SERVICETYPE {
+		Quit $$$ERROR($$$EnsZenCloudMessagingErrIncompatibleNotificationType,pRequest.Service,..#SERVICETYPE)
+	} Else {
+		Quit $CASE(..NotificationProtocol,
+					  "http":..HTTPPushNotification(pRequest,.pResponse),
+					  "xmpp":..XMPPPushNotification(pRequest,.pResponse),
+					        :$$$ERROR($$$EnsZenCloudMessagingErrNotificationProtocolNotSupported,..NotificationProtocol))
+	}
+]]></Implementation>
+</Method>
+
+<Method name="HTTPPushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tMsg As %String
+		#dim tReply As %String
+		#dim tPayload As %String
+		#dim tGCMResponse As %ZEN.proxyObject
+		
+		
+		Set tSC = ..ConstructGCMHTTPPayload(pRequest,.tPayload)
+		Quit:$$$ISERR(tSC)
+		
+		Set ..HttpRequest.ContentType = "application/json"
+		Do ..HttpRequest.SetHeader("Authorization", "key=" _ pRequest.AppIdentifier)
+		
+		Do ..HttpRequest.EntityBody.Write(tPayload)
+		Do ..HttpRequest.EntityBody.Rewind()
+		
+		Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*))
+		Quit:$$$ISERR(tSC)
+
+		#dim tHttpResponse As %Net.HttpResponse = ..HttpRequest.HttpResponse
+		
+		If '$IsObject(tHttpResponse) {
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrGCMConnectionFailed,..PushServer)
+			Quit
+		}
+		
+		If +tHttpResponse.StatusCode'?1"2"2N {
+			// Non 2xx HTTP response ...
+			Set tSC=$$$ERROR($$$EnsErrHTTPStatus,tHttpResponse.StatusCode,tHttpResponse.StatusLine)
+			Quit
+		}
+
+		// Now, we must parse the JSON response from the GCM server ...
+		Set tSC = ##class(%ZEN.Auxiliary.jsonProvider).%ParseJSON(tHttpResponse.Data,,.tGCMResponse)
+		Quit:$$$ISERR(tSC)
+		
+		If tGCMResponse.success {
+
+			Set tSC = pRequest.NewResponse(.pResponse)
+			Quit:$$$ISERR(tSC)
+
+			Set tSC = ..ParseGCMHTTPSuccessResponse(tGCMResponse,pResponse)
+			Quit:$$$ISERR(tSC)
+			
+			// Otherwise, success!
+
+		} ElseIf tGCMResponse.failure {
+			Set tSC = ..ParseGCMHTTPFailureResponse(tGCMResponse)
+			Quit
+		} Else {
+			// Unknown error!
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrGCMPushNotificationFailed)
+			Quit
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="XMPPPushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[	Quit $$$ERROR($$$NotImplemented)
+]]></Implementation>
+</Method>
+
+<XData name="MessageMap">
+<Data><![CDATA[
+<MapItems>
+	<MapItem MessageType="EnsLib.ZenCloudMessaging.NotificationRequest"> 
+		<Method>PushNotification</Method>
+	</MapItem>
+</MapItems>
+]]></Data>
+</XData>
+
+<Method name="ConstructGCMHTTPPayload">
+<Description>
+Construct a payload request for GCM (over HTTP)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pPayload:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tPayloadData
+		#dim tIndex As %Integer
+		
+		If (pRequest.SoundNotification="")
+			&& (pRequest.AlertNotification="")
+			&& (pRequest.BadgeNotification="")
+			&& (pRequest.Data.Count() = 0) {
+				
+			// Must have at least one of these properties set ...
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrInvalidNotification)
+			Quit
+		}
+		
+		Set tPayloadData("registration_ids") = ""
+		For tIndex = 1:1:pRequest.Identifiers.Count() {
+			#dim tRegId As %String = pRequest.Identifiers.GetAt(tIndex)
+			Set tPayloadData("registration_ids") = tPayloadData("registration_ids") _ $LB(tRegId)
+		}
+		
+		Set:pRequest.SoundNotification'="" tPayloadData("data", "sound") = pRequest.SoundNotification
+		Set:pRequest.AlertNotification'="" tPayloadData("data", "alert") = pRequest.AlertNotification
+		Set:pRequest.BadgeNotification'="" tPayloadData("data", "badge") = pRequest.BadgeNotification
+		Set:pRequest.UrlNotification'="" tPayloadData("data", "url") = pRequest.UrlNotification
+				
+		#dim tKey As %String = ""
+		#dim tValue As %String
+		For {
+			Set tValue = pRequest.Data.GetNext(.tKey)
+			Quit:tKey=""
+			
+			Set tPayloadData("data","data",tKey) = tValue
+		}
+		
+		Set:pRequest.CollapseKey'="" tPayloadData("collapse_key") = pRequest.CollapseKey		
+		Set:pRequest.ExpiresUTC'="" tPayloadData("time_to_live") = ##class(EnsLib.ZenCloudMessaging.Util).TimeStampDelta(pRequest.ExpiresUTC,,1)\1
+		
+		// Convert the array to JSON
+		Set pPayload = ##class(EnsLib.ZenCloudMessaging.Util).ConvertArrayToJSON(.tPayloadData)
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="ParseGCMHTTPSuccessResponse">
+<Internal>1</Internal>
+<FormalSpec>pGCMResponse:%ZEN.proxyObject,pResponse:EnsLib.ZenCloudMessaging.NotificationResponse</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tIndex As %Integer
+		
+		// Remember when we actually delivered it
+		Set pResponse.DeliveredAtUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)
+
+		// Grab the multicast id
+		Set pResponse.MulticastId = pGCMResponse."multicast_id"
+		
+		// And the underlying message ids
+		For tIndex = 1:1:pGCMResponse.results.Count() {
+			#dim tResult As %ZEN.proxyObject = pGCMResponse.results.GetAt(tIndex)
+			#dim tMsgId As %String = tResult."message_id"
+			
+			// Add this message id
+			Do pResponse.MessageIds.Insert(tMsgId)
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="ParseGCMHTTPFailureResponse">
+<Description>
+Parse the JSON response from the GCM HTTP server</Description>
+<Internal>1</Internal>
+<FormalSpec>pGCMResponse:%ZEN.proxyObject</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tIndex As %Integer
+		
+		For tIndex = 1:1:pGCMResponse.results.Count() {
+			#dim tResult As %ZEN.proxyObject = pGCMResponse.results.GetAt(tIndex)
+			#dim tReason As %String = tResult."error"
+			#dim tSC2 As %Status
+			
+			// Construct a status for this error
+			Set tSC2 = $$$ERROR($$$EnsZenCloudMessagingErrGCMPushNotificationFailedWithReason,tReason)
+			Set tSC = $$$ADDSC(tSC,tSC2)
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="OnInit">
+<Description>
+This user callback method is called via initConfig() from %OnNew() or in the case of SOAP Services from OnPreSOAP()</Description>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		// TODO: Implement XMPP support
+		If ..NotificationProtocol = "xmpp" {
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrNotificationProtocolNotSupported,..NotificationProtocol)
+			Quit
+		}
+		
+		Set ..HttpRequest = ##class(%Net.HttpRequest).%New()
+			
+		Set ..HttpRequest.SSLConfiguration=..SSLConfig
+		Set ..HttpRequest.Server = $P(..PushServer,"/",3)
+		Set ..HttpRequest.Port = 443
+		Set ..HttpRequest.Https=1
+		Set ..HttpRequest.Timeout=$S(..Timeout=-1:2123456789,1:..Timeout)
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="OnTearDown">
+<Description>
+This user callback method is called from %OnClose()</Description>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set ..HttpRequest = $$$NULLOREF
+	
+	Quit $$$OK
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking">
+<Description>
+Zen Mobile Cloud Messaging Device Tracking</Description>
+<ClassType>persistent</ClassType>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>%Persistent,%XML.Adaptor</Super>
+<TimeChanged>63238,49594.167708</TimeChanged>
+<TimeCreated>62999,34371.399924</TimeCreated>
+
+<Property name="Service">
+<Description>
+Service type descriptor</Description>
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="DISPLAYLIST" value=",Apple Push Notification Service,Google Cloud Messaging"/>
+<Parameter name="VALUELIST" value=",APNS,GCM"/>
+</Property>
+
+<Property name="Identifier">
+<Description>
+Device Identifier (i.e. DeviceToken, or Registration Id)</Description>
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Property name="AppIdentifier">
+<Description>
+App Identifier</Description>
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Property name="AssociatedAppTokens">
+<Description>
+Associated Application Token</Description>
+<Type>%String</Type>
+<Collection>list</Collection>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Property name="LastUpdatedUTC">
+<Description>
+Last updated-at timestamp</Description>
+<Type>%TimeStamp</Type>
+<InitialExpression>$ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Index name="AssociatedAppTokensIndex">
+<Description>
+Index the associated app tokens (all of them) with this object</Description>
+<Properties>AssociatedAppTokens(ELEMENTS)</Properties>
+</Index>
+
+<Index name="ServiceIndex">
+<Description>
+Index the service</Description>
+<Properties>Service</Properties>
+</Index>
+
+<Index name="IdentifierIndex">
+<Description>
+Index the device identifier</Description>
+<Properties>Identifier</Properties>
+</Index>
+
+<Index name="AppIdentifierIndex">
+<Description>
+Index the app identifier</Description>
+<Properties>AppIdentifier</Properties>
+</Index>
+
+<Method name="AssociateDeviceWithAppToken">
+<Description>
+Associate an application token with a deviceid/appid</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pIdentifier:%String,pAppId:%String,pService:%String,pAppToken:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tDevice As EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking
+
+		Set tSC = ..FindDeviceByDeviceAndAppIds(pIdentifier,pAppId,pService,.tDevice,1)
+		Quit:$$$ISERR(tSC)
+		
+		If tDevice.AssociatedAppTokens.Find(pAppToken)="" {
+			Do tDevice.AssociatedAppTokens.Insert(pAppToken)
+			Set tDevice.LastUpdatedUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)
+			
+			Set tSC = tDevice.%Save()
+			Quit:$$$ISERR(tSC)
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$ERROR($$$CacheError,$ZE)
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="DisassociateDeviceWithAppToken">
+<Description>
+Disassociate an application token with a identifier/appid</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pIdentifier:%String,pAppId:%String,pService:%String,pAppToken:%String</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	break
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tDevice As EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking
+		#dim tIndex As %Integer
+
+		Set tSC = ..FindDeviceByDeviceAndAppIds(pIdentifier,pAppId,pService,.tDevice,0)
+		Quit:$$$ISERR(tSC)
+		
+		Set tIndex = tDevice.AssociatedAppTokens.Find(pAppToken)
+		If tIndex '= "" {
+			Do tDevice.AssociatedAppTokens.RemoveAt(tIndex)
+			
+			If tDevice.AssociatedAppTokens.Count() = 0 {
+				// No more app tokens, let's delete this ...
+				Set tSC = ..%DeleteId(tDevice.%Id())
+				Quit:$$$ISERR(tSC)
+			} Else {
+				// Save this updated object (less one app token)
+				Set tDevice.LastUpdatedUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)
+				
+				Set tSC = tDevice.%Save()
+				Quit:$$$ISERR(tSC)
+			}
+		} Else {
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrInvalidDeviceIdAppIdAppTokenAssociation)
+			Quit
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$ERROR($$$CacheError,$ZE)
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="FindDeviceByDeviceAndAppIds">
+<Description>
+Helper to locate and/or create a device tracking object from a deviceid/appid pair</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pIdentifier:%String,pAppId:%String,pService:%String,&pDevice:EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking,pCreate:%Boolean=0]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		
+		#dim tId As %String = ""
+		#dim SQLCODE As %Integer
+		
+		Set pDevice = $$$NULLOREF
+		Set SQLCODE=0
+		&sql(SELECT %ID INTO :tId
+				FROM DeviceTracking
+				WHERE (Service = :pService) AND (Identifier = :pIdentifier) AND (AppIdentifier = :pAppId))
+
+		If SQLCODE=0 {
+			
+			// Open the object ...
+			Set pDevice = ..%OpenId(tId)
+			
+		} ElseIf SQLCODE'=100 {
+			// Some other error
+			Set tSC = $$$ERROR($$$SQLError,SQLCODE,$G(%msg))
+			Quit
+		} Else {
+			// Not found ...
+			Set pDevice = ..%New()
+			Set pDevice.Service = pService
+			Set pDevice.Identifier = pIdentifier
+			Set pDevice.AppIdentifier = pAppId
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$ERROR($$$CacheError,$ZE)
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="FindDeviceByAppToken">
+<Description>
+Locate a device tracking object by an app token</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pAppToken:%String,&pDevice:EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tId As %String = ""
+		#dim SQLCODE As %Integer
+		
+		Set pDevice = $$$NULLOREF
+		Set SQLCODE=0
+		&sql(SELECT %ID INTO :tId
+				FROM DeviceTracking
+				WHERE FOR SOME %ELEMENT(AssociatedAppTokens) (%Value = :pAppToken))
+
+		If SQLCODE=0 {
+			
+			// Open the object ...
+			Set pDevice = ..%OpenId(tId)
+			
+		} ElseIf SQLCODE'=100 {
+			// Some other error
+			Set tSC = $$$ERROR($$$SQLError,SQLCODE,$G(%msg))
+			Quit
+		}
+		// Else SQLCODE=100 means not found ...
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$ERROR($$$CacheError,$ZE)
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Query name="DeviceSearchByAppToken">
+<Description>
+Search for devices matching the associated app token</Description>
+<Type>%SQLQuery</Type>
+<FormalSpec>pAppToken:%String</FormalSpec>
+<SqlQuery>SELECT %ID, Service, Identifier, LastUpdatedUTC FROM DeviceTracking
+ WHERE FOR SOME %ELEMENT(AssociatedAppTokens) (%Value = :pAppToken)</SqlQuery>
+<Parameter name="CONTAINID" value="1"/>
+</Query>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^EnsLib.ZenCF0EF.DeviceTrackingD</DataLocation>
+<DefaultData>DeviceTrackingDefaultData</DefaultData>
+<IdLocation>^EnsLib.ZenCF0EF.DeviceTrackingD</IdLocation>
+<IndexLocation>^EnsLib.ZenCF0EF.DeviceTrackingI</IndexLocation>
+<StreamLocation>^EnsLib.ZenCF0EF.DeviceTrackingS</StreamLocation>
+<ExtentSize>100000</ExtentSize>
+<Data name="DeviceTrackingDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>Service</Value>
+</Value>
+<Value name="3">
+<Value>Identifier</Value>
+</Value>
+<Value name="4">
+<Value>AppIdentifier</Value>
+</Value>
+<Value name="5">
+<Value>AssociatedAppTokens</Value>
+</Value>
+<Value name="6">
+<Value>LastUpdatedUTC</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest">
+<Description>
+Notification by identity request</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>Ens.Request,EnsLib.ZenCloudMessaging.NotificationInfo</Super>
+<TimeChanged>63237,54038</TimeChanged>
+<TimeCreated>62999,32136.778795</TimeCreated>
+
+<Property name="AssociatedAppToken">
+<Description>
+Associated Application Token</Description>
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Parameter name="RESPONSECLASSNAME">
+<Description>
+Response class</Description>
+<Type>%String</Type>
+<Default>EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityResponse</Default>
+</Parameter>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>NotificationByIdentityRequestDefaultData</DefaultData>
+<Data name="Data">
+<Attribute>Data</Attribute>
+<Structure>subnode</Structure>
+<Subscript>"EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest.Data"</Subscript>
+</Data>
+<Data name="NotificationByIdentityRequestDefaultData">
+<Structure>listnode</Structure>
+<Subscript>"NotificationByIdentityRequest"</Subscript>
+<Value name="1">
+<Value>AssociatedAppToken</Value>
+</Value>
+<Value name="2">
+<Value>ExpiresUTC</Value>
+</Value>
+<Value name="3">
+<Value>SoundNotification</Value>
+</Value>
+<Value name="4">
+<Value>AlertNotification</Value>
+</Value>
+<Value name="5">
+<Value>BadgeNotification</Value>
+</Value>
+<Value name="6">
+<Value>UrlNotification</Value>
+</Value>
+<Value name="7">
+<Value>CollapseKey</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityResponse">
+<Description>
+Notification by identity response</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>Ens.Response</Super>
+<TimeChanged>63237,54038</TimeChanged>
+<TimeCreated>62999,32136.778795</TimeCreated>
+
+<Property name="NotificationCount">
+<Description>
+Count of notifications sent</Description>
+<Type>%Integer</Type>
+<InitialExpression>0</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>NotificationByIdentityResponseDefaultData</DefaultData>
+<Data name="NotificationByIdentityResponseDefaultData">
+<Structure>listnode</Structure>
+<Subscript>"NotificationByIdentityResponse"</Subscript>
+<Value name="1">
+<Value>NotificationCount</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.Process.Context">
+<Description>
+This class is generated by the EnsLib.ZenCloudMessaging.IdentityManager.Process BPL class.
+This class should not be edited or modified in any way.</Description>
+<ClassType>persistent</ClassType>
+<CompileAfter>EnsLib.ZenCloudMessaging.IdentityManager.Process</CompileAfter>
+<IncludeCode/>
+<ProcedureBlock>1</ProcedureBlock>
+<Super>Ens.BP.Context</Super>
+<TimeChanged>63239,52878.377364</TimeChanged>
+<TimeCreated>63237,54375.258815</TimeCreated>
+<GeneratedBy>Ens.BPL.Compiler.CLS</GeneratedBy>
+
+<Property name="CurrentIdId">
+<Type>%Integer</Type>
+</Property>
+
+<Property name="CurrentIdentity">
+<Type>EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking</Type>
+</Property>
+
+<Property name="IdentitySearchResults">
+<Type>EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking</Type>
+<Collection>list</Collection>
+</Property>
+
+<Property name="PendingCalls">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+</Property>
+
+<Method name="%OnNew">
+<FormalSpec>initvalue</FormalSpec>
+<Language>cache</Language>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ If '$IsObject(..CurrentIdentityNewObject()) Quit %objlasterror
+ Quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="OnResponse1">
+<Description>
+Response Handler for call to @process.NotificationServiceTarget</Description>
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,request:EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest,response:EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityResponse,callrequest:EnsLib.ZenCloudMessaging.NotificationRequest,callresponse:EnsLib.ZenCloudMessaging.NotificationResponse,callname:%String</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Set status=$$$OK,response.NotificationCount=response.NotificationCount + 1
+ If $$$ISERR(status) Quit
+ } while (0)
+Exit Quit status
+Trap Set $ZT="",status=##class(Ens.Util.Error).EnsSystemError("EnsLib.ZenCloudMessaging.IdentityManager.Process.Thread1","OnResponse1")
+ Goto Exit
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>ContextDefaultData1</DefaultData>
+<Data name="ContextDefaultData1">
+<Structure>listnode</Structure>
+<Subscript>"Context"</Subscript>
+<Value name="1">
+<Value>CurrentIdentity</Value>
+</Value>
+<Value name="2">
+<Value>IdentitySearchResults</Value>
+</Value>
+<Value name="3">
+<Value>PendingCalls</Value>
+</Value>
+<Value name="4">
+<Value>CurrentIdId</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.Process.Thread1">
+<Description>
+This class is generated by the EnsLib.ZenCloudMessaging.IdentityManager.Process BPL class.
+This class should not be edited or modified in any way.</Description>
+<ClassType>persistent</ClassType>
+<CompileAfter>EnsLib.ZenCloudMessaging.IdentityManager.Process</CompileAfter>
+<ProcedureBlock>1</ProcedureBlock>
+<Super>Ens.BP.Thread</Super>
+<TimeChanged>63239,53101.786561</TimeChanged>
+<TimeCreated>63239,52878.363636</TimeCreated>
+<GeneratedBy>Ens.BPL.Compiler.CLS</GeneratedBy>
+
+<Method name="S1">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Set status=$$$OK,status=process.IdentitySearch(request.AssociatedAppToken,context)
+ If $$$ISERR(status) Quit
+ Set status=$$$OK,context.IdentitySearchResults=process.IdentitySearch(request.AssociatedAppToken,context)
+ If $$$ISERR(status) Quit
+ If (context.IdentitySearchResults.Count() > 0) {
+ Set ..%NextState="S3"
+ } else {
+ Set ..%NextState="S9"
+ }
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S1") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S2">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Do process.ClearAllPendingResponses()
+ Set ..%NextState="Stop"
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S2") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S3">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Set context.CurrentIdId="",..%NextState="S4"
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S3") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S4">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Set context.CurrentIdId=context.IdentitySearchResults.Next(context.CurrentIdId)
+ If context.CurrentIdId="" {
+  Set ..%NextState="S6"
+ } else {
+  Set ..%NextState="S5"
+ }
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S4") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S5">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Set status=$$$OK,context.CurrentIdentity=context.IdentitySearchResults.GetAt(context.CurrentIdId)
+ If $$$ISERR(status) Quit
+ #; --- Begin Call @(process.MakePendingCall("PushServiceCall",context,.status)) ---
+ #; --- Begin Request ---
+ Set callrequest=##class(EnsLib.ZenCloudMessaging.NotificationRequest).%New()
+ If '$IsObject(callrequest) Set status=%objlasterror Quit
+ $$$TRACE("callrequest.Data="_callrequest.Data)
+ Set status=$$$OK,status=##class(EnsLib.ZenCloudMessaging.NotificationInfo).CopyFrom(request,callrequest)
+ If $$$ISERR(status) Quit
+ Set status=$$$OK,callrequest.Service=context.CurrentIdentity.Service
+ If $$$ISERR(status) Quit
+ Set status=$$$OK,callrequest.AppIdentifier=context.CurrentIdentity.AppIdentifier
+ If $$$ISERR(status) Quit
+ Set status=callrequest.Identifiers.Insert(context.CurrentIdentity.Identifier)
+ If $$$ISERR(status) Quit
+ Set status=..MakeAsyncCall("OnResponse1",process.NotificationServiceTarget,callrequest,(process.MakePendingCall("PushServiceCall",context,.status)),1,0,(process.MakePendingCall("PushServiceCall",context,.status)),0)
+ If $$$ISERR(status) Quit
+ Kill callrequest
+ #; --- End Request ---
+ #; --- End Call @(process.MakePendingCall("PushServiceCall",context,.status)) ---
+ Set ..%NextState="S4"
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S5") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S6">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Do ..%PendingResponses.Clear(),..%SyncResponses.Clear()
+ Set ..%SyncTimedOut=0,..%PendingTimeout="",..%PendingAlarmHandle="",..%SyncName=""
+ For tI=1:1:$Length((context.PendingCalls),",") {
+    If ..%Process.IsResponsePending($Piece((context.PendingCalls),",",tI)) Do ..%PendingResponses.SetAt("",$Piece((context.PendingCalls),",",tI))
+ }
+ If ..%PendingResponses.Count()=0 {
+    Set ..%NextState="S8"
+ } else {
+    Set ..%NextState="S7",..%Wait=1
+ }
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S6") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S7">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ If ..%PendingResponses.Count()=0 {
+    Set ..%NextState="S8"
+ } else {
+    Set ..%NextState="S7",..%Wait=1
+ }
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S7") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S8">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Set ..%NextState="S2"
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S8") Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="S9">
+<FormalSpec>process:Ens.BusinessProcess,context:Ens.BP.Context,synctimedout:%Boolean,syncresponses:%ArrayOfObjects(ELEMENTTYPE="%Library.Persistent"),request:%Library.Persistent,response:%Library.Persistent</FormalSpec>
+<Language>cache</Language>
+<PublicList>process,context</PublicList>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+ Set $ZT="Trap",status=$$$OK do {
+ Set status=$$$OK,response.NotificationCount=0
+ If $$$ISERR(status) Quit
+ Do ##class(Ens.Util.Trace).WriteTrace("user","EnsLib.ZenCloudMessaging.IdentityManager.Process","S9","No Devices found for Identity")
+ Set ..%NextState="S2"
+ } while (0)
+Exit Quit ..ManageState(status)
+Trap Set $ZT="",status=..ManageStatus(status,"S9") Goto Exit
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+</Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.Process">
+<Description>
+</Description>
+<ClassType>persistent</ClassType>
+<ProcedureBlock>1</ProcedureBlock>
+<Super>Ens.BusinessProcessBPL</Super>
+<TimeChanged>63239,52877.786109</TimeChanged>
+<TimeCreated>63030,3238.563985</TimeCreated>
+
+<XData name="BPL">
+<Description>
+BPL Definition</Description>
+<XMLNamespace>http://www.intersystems.com/bpl</XMLNamespace>
+<Data><![CDATA[
+<process language='objectscript' request='EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest' response='EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityResponse' height='2000' width='2000' >
+<context>
+<property name='IdentitySearchResults' type='EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking' collection='list' >
+</property>
+<property name='CurrentIdentity' type='EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking' instantiate='1' >
+</property>
+<property name='CurrentIdId' type='%Integer' />
+<property name='PendingCalls' type='%String' >
+<parameters>
+<parameter name='MAXLEN'  value='' />
+</parameters>
+</property>
+</context>
+<sequence xend='200' yend='800' >
+
+<assign name="Do Identity Search" property="status" value="process.IdentitySearch(request.AssociatedAppToken,context)" action="set" xpos='200' ypos='250' />
+<assign name="Do Identity Search" property="context.IdentitySearchResults" value="process.IdentitySearch(request.AssociatedAppToken,context)" action="set" xpos='200' ypos='250' />
+
+<if name='Found Matches?' condition='context.IdentitySearchResults.Count() &gt; 0' xpos='200' ypos='350' xend='200' yend='700' >
+<true>
+<foreach name='Process Identities' property='context.IdentitySearchResults' key='context.CurrentIdId' xpos='470' ypos='500' xend='200' yend='350' >
+<assign name="Set CurrentIdentity" property="context.CurrentIdentity" value="context.IdentitySearchResults.GetAt(context.CurrentIdId)" />
+<call name='@(process.MakePendingCall("PushServiceCall",context,.status))' target='@process.NotificationServiceTarget' async='1' xpos='200' ypos='250' >
+<request type='EnsLib.ZenCloudMessaging.NotificationRequest' >
+<assign property="status" value="##class(EnsLib.ZenCloudMessaging.NotificationInfo).CopyFrom(request,callrequest)" action="set" />
+<assign property="callrequest.Service" value="context.CurrentIdentity.Service" action="set" />
+<assign property="callrequest.AppIdentifier" value="context.CurrentIdentity.AppIdentifier" action="set" />
+<assign property="callrequest.Identifiers" value="context.CurrentIdentity.Identifier" action="append" />
+</request>
+<response type='EnsLib.ZenCloudMessaging.NotificationResponse' >
+<assign property="response.NotificationCount" value="response.NotificationCount + 1" action="set" />
+</response>
+</call>
+</foreach>
+<sync name='Wait for Notification(s)' calls='@(context.PendingCalls)' type='all' xpos='470' ypos='600' />
+</true>
+<false>
+<assign property="response.NotificationCount" value="0" action="set" xpos='200' ypos='500' />
+<trace value='"No Devices found for Identity"' xpos='200' ypos='600' />
+</false>
+</if>
+</sequence>
+</process>
+]]></Data>
+</XData>
+
+<Property name="NotificationServiceTarget">
+<Description>
+Specify the outbound notification service component/message router</Description>
+<Type>Ens.DataType.ConfigName</Type>
+<Required>1</Required>
+</Property>
+
+<Parameter name="SETTINGS">
+<Type>%String</Type>
+<Default>NotificationServiceTarget</Default>
+</Parameter>
+
+<Method name="MakePendingCall">
+<Description>
+Add a pending call</Description>
+<FormalSpec><![CDATA[pCallPrefix:%String,pContext,&pStatus:%Status]]></FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	#dim tCallKey As %String = ""
+	Set tSC=$$$OK,$ZT=""
+	Do {
+		
+		Set tCallKey = pCallPrefix _ $L(pContext.PendingCalls,",")
+		
+		If pContext.PendingCalls'="" {
+			Set pContext.PendingCalls = pContext.PendingCalls _ ","
+		}
+		
+		// Append our new call key
+		Set pContext.PendingCalls = pContext.PendingCalls _ tCallKey
+		
+	} While (0)
+Exit
+	Set pStatus = tSC
+	
+	Quit tCallKey
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="IdentitySearch">
+<FormalSpec>pIdentity:%String,pContext</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT=""
+	Do {
+		#dim tRS As %ResultSet
+		
+		// Run an SQL query ...
+		Set tRS = ##class(%ResultSet).%New()
+		Set tRS.ClassName = "EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking"
+		Set tRS.QueryName = "DeviceSearchByAppToken"
+		
+		Set tSC = tRS.Execute(pIdentity)
+		Quit:$$$ISERR(tSC)
+		
+		// Process the results ...
+		While (tRS.Next(.tSC) && $$$ISOK(tSC)) {
+			
+			#dim tID     As %String        = tRS.Data("ID")
+			#dim tDevice As DeviceTracking = ##class(DeviceTracking).%OpenId(tID,,.tSC)
+			
+			Quit:$$$ISERR(tSC)
+			
+			// Remember this ...
+			Do pContext.IdentitySearchResults.Insert(tDevice)
+		}
+		$$$TRACE("pContext.CurrentIdentity="_pContext.CurrentIdentity)
+		$$$TRACE("pContext.IdentitySearchResults.Count()="_pContext.IdentitySearchResults.Count())
+		Do tRS.Close()
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>ProcessDefaultData</DefaultData>
+<Data name="ProcessDefaultData">
+<Subscript>"Process"</Subscript>
+<Value name="1">
+<Value>NotificationServiceTarget</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.NotificationInfo">
+<Description>
+Notification by identity request</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>%XML.Adaptor</Super>
+<TimeChanged>63239,53230.644522</TimeChanged>
+<TimeCreated>62999,32136.778795</TimeCreated>
+
+<Property name="CollapseKey">
+<Description>
+Collapse key (if supported)</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Property name="ExpiresUTC">
+<Description>
+Expiration for this message</Description>
+<Type>%TimeStamp</Type>
+</Property>
+
+<Property name="SoundNotification">
+<Description>
+Sound notification</Description>
+<Type>%String</Type>
+</Property>
+
+<Property name="AlertNotification">
+<Description>
+Alert notification</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="256"/>
+</Property>
+
+<Property name="BadgeNotification">
+<Description>
+Badge notification</Description>
+<Type>%Integer</Type>
+</Property>
+
+<Property name="UrlNotification">
+<Description>
+Alert-URL notification</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="2048"/>
+</Property>
+
+<Property name="Data">
+<Description>
+Custom data notification(s)</Description>
+<Type>%String</Type>
+<Collection>array</Collection>
+<Parameter name="MAXLEN" value="2048"/>
+</Property>
+
+<Method name="CopyFrom">
+<ClassMethod>1</ClassMethod>
+<CodeMode>generator</CodeMode>
+<FormalSpec>pSrc:%RegisteredObject,pTarget:%RegisteredObject</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tProperty As %String
+	#dim tRuntimeType As %String
+	
+    $$$GENERATE("   If '$IsObject($GET(pTarget)) || 'pTarget.%Extends("""_%class_""") {")
+    $$$GENERATE("   	Quit $$$ERROR($$$ObjectInstanceRequired)")
+    $$$GENERATE("   }")
+    $$$GENERATE("   Set tType = pSrc.%ClassName(1)")
+    
+    Set tProperty = ""
+    For {
+        Set tProperty = $$$comMemberNext(%class,$$$cCLASSproperty,tProperty)
+        Quit:tProperty=""
+        
+        Continue:+$$$comMemberKeyGet(%class,$$$cCLASSproperty,tProperty,$$$cPROPsqlcomputed)            
+        Continue:+$$$comMemberKeyGet(%class,$$$cCLASSproperty,tProperty,$$$cPROPcalculated)             
+        Continue:+$$$comMemberKeyGet(%class,$$$cCLASSproperty,tProperty,$$$cPROPreadonly)
+                        
+        $$$comMemberKeyGetLvar(tRuntimeType,%class,$$$cCLASSproperty,tProperty,$$$cPROPruntimetype)
+        
+        If ($$$getClassType(tRuntimeType)=$$$cCLASSCLASSTYPEDATATYPE) && ($E(tProperty,1)'="%") {
+            // Copy this property (if it exists in the src object)
+            $$$GENERATE("   Set:$$$comMemberDefined(tType,"""_$$$cCLASSproperty_""","""_tProperty_""") pTarget."_tProperty_" = pSrc."_tProperty)
+        }
+        ElseIf (tRuntimeType="%Collection.ListOfObj" && ($E(tProperty,1)'="%")) {
+			$$$GENERATE("   If $$$comMemberDefined(tType,"""_$$$cCLASSproperty_""","""_tProperty_""")&&($c(0)'[pSrc."_tProperty_") { Do pTarget."_tProperty_".Clear() For tItem=1:1:pSrc"_tProperty_".Count() Do pTarget."_tProperty_".Insert(pSrc."_tProperty_".GetAt(tItem)) }")
+        }
+        ElseIf (tRuntimeType="%Collection.ArrayOfDT" && ($E(tProperty,1)'="%"))
+        {
+	        $$$GENERATE("   If $$$comMemberDefined(tType,"""_$$$cCLASSproperty_""","""_tProperty_""")&&($c(0)'[pSrc."_tProperty_") { Do pTarget."_tProperty_".Clear() Set tKey="""" For  { Do pSrc."_tProperty_".GetNext(.tKey) Quit:tKey=""""  Do pTarget."_tProperty_".SetAt(tKey, pSrc."_tProperty_".GetAt(tKey)) }}")
+        }    
+        /*      
+        Else
+        {       $$$GENERATE("   ; runtime type of "_tProperty_" is "_tRuntimeType_", class type of runtime type is "_$$$getClassType(tRuntimeType)) }
+        */
+        
+    }
+    
+    $$$GENERATE("   Quit $$$OK")
+
+    Quit $$$OK
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.NotificationRequest">
+<Description>
+Notification send request class for Apple Push Notification Service</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>Ens.Request,NotificationInfo</Super>
+<TimeChanged>63237,54039</TimeChanged>
+<TimeCreated>62999,32136.778795</TimeCreated>
+
+<Parameter name="RESPONSECLASSNAME">
+<Description>
+Response class</Description>
+<Type>%String</Type>
+<Default>EnsLib.ZenCloudMessaging.NotificationResponse</Default>
+</Parameter>
+
+<Property name="Service">
+<Description>
+Service type descriptor</Description>
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="DISPLAYLIST" value=",Apple Push Notification Service,Google Cloud Messaging"/>
+<Parameter name="VALUELIST" value=",APNS,GCM"/>
+</Property>
+
+<Property name="Identifiers">
+<Description>
+Device Identifier (i.e. DeviceToken, or Registration Id)</Description>
+<Type>%String</Type>
+<Collection>list</Collection>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Property name="AppIdentifier">
+<Description>
+App Identifier (not used by APNS)</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>NotificationRequestDefaultData</DefaultData>
+<Data name="Data">
+<Attribute>Data</Attribute>
+<Structure>subnode</Structure>
+<Subscript>"EnsLib.ZenCloudMessaging.NotificationRequest.Data"</Subscript>
+</Data>
+<Data name="NotificationRequestDefaultData">
+<Structure>listnode</Structure>
+<Subscript>"NotificationRequest"</Subscript>
+<Value name="1">
+<Value>CollapseKey</Value>
+</Value>
+<Value name="2">
+<Value>ExpiresUTC</Value>
+</Value>
+<Value name="3">
+<Value>Identifiers</Value>
+</Value>
+<Value name="4">
+<Value>AlertNotification</Value>
+</Value>
+<Value name="5">
+<Value>BadgeNotification</Value>
+</Value>
+<Value name="6">
+<Value>UrlNotification</Value>
+</Value>
+<Value name="7">
+<Value>AppIdentifier</Value>
+</Value>
+<Value name="8">
+<Value>Service</Value>
+</Value>
+<Value name="9">
+<Value>SoundNotification</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.NotificationResponse">
+<Description>
+Response message for push notification requests</Description>
+<Super>Ens.Response</Super>
+<TimeChanged>63237,54039</TimeChanged>
+<TimeCreated>62999,33337.006879</TimeCreated>
+
+<UDLText name="T">
+<Content><![CDATA[
+// Time stamp (in UTC) of when the notification was delivered
+
+]]></Content>
+</UDLText>
+
+<Property name="DeliveredAtUTC">
+<Type>%TimeStamp</Type>
+</Property>
+
+<Property name="MulticastId">
+<Description>
+Multicast Id (GCM only)</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Property name="MessageIds">
+<Description>
+List of message id(s) for the delivered messages</Description>
+<Type>%String</Type>
+<Collection>list</Collection>
+<Parameter name="MAXLEN" value="512"/>
+</Property>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DefaultData>NotificationResponseDefaultData</DefaultData>
+<Data name="NotificationResponseDefaultData">
+<Subscript>"NotificationResponse"</Subscript>
+<Value name="1">
+<Value>DeliveredAtUTC</Value>
+</Value>
+<Value name="2">
+<Value>MulticastId</Value>
+</Value>
+<Value name="3">
+<Value>MessageIds</Value>
+</Value>
+</Data>
+</Storage>
+</Class>
+
+
+
+
+<Class name="EnsLib.ZenCloudMessaging.Util">
+<Description>
+Zen Mobile Cloud Messaging Utilitiies</Description>
+<TimeChanged>63237,54039</TimeChanged>
+<TimeCreated>62999,34371.399924</TimeCreated>
+
+<Method name="ConvertArrayToJSON">
+<Description>
+Helper method to double up quotes in a string</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&pArray]]></FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#dim tOutput As %String = ""
+	#dim tSubscript As %String = ""
+	
+	For {
+		Set tSubscript = $ORDER(pArray(tSubscript))
+		Quit:tSubscript=""
+		
+		Set:tOutput'="" tOutput = tOutput _ ","
+		
+		Set tOutput = tOutput _ ..Quote(tSubscript) _ ": "
+		
+		If $GET(pArray(tSubscript))'="" {
+			#dim tValue = pArray(tSubscript)
+			
+			If $LISTVALID(tValue) {
+				#dim tIndex As %Integer
+				
+				// $LIST .. aka an array
+				
+				// NOTE: This only handles an array of scalar values
+				Set tOutput = tOutput _ "[ "
+				For tIndex = 1:1:$LISTLENGTH(tValue) {
+					Set:tIndex>1 tOutput = tOutput _ ", "
+					Set tOutput = tOutput _ ..Quote($LISTGET(tValue,tIndex),0)
+				}
+				
+				Set tOutput = tOutput _ " ]"
+			} Else {
+				// Simple string
+				Set tOutput = tOutput _ ..Quote(tValue,0)
+			}
+		} Else {
+			// Child elements
+			#dim tTemp
+			
+			Kill tTemp
+			Merge tTemp = pArray(tSubscript)
+			Set tOutput = tOutput _ ..ConvertArrayToJSON(.tTemp)
+		}
+	}
+	
+	Set tOutput = "{" _ tOutput _ "}"
+	
+	Quit tOutput
+]]></Implementation>
+</Method>
+
+<Method name="Quote">
+<Description>
+Helper method to double up quotes in a string</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pInput:%String,pForce:%Boolean=1</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	#dim tOutput As %String = """"
+	#dim tIndex As %Integer
+	
+	If ('pForce) && (pInput?1.N) {
+		// Don't quote numbers if not forced to
+		Quit pInput
+	}
+	
+	For tIndex = 1:1:$L(pInput) {
+		#dim tChar As %String = $E(pInput,tIndex)
+		Set tOutput = tOutput _ tChar
+		
+		// Double up any quotes
+		If tChar="""" Set tOutput = tOutput _ """"
+	}
+	
+	Set tOutput = tOutput _ """"
+	
+	Quit tOutput
+]]></Implementation>
+</Method>
+
+<Method name="TimeStampToUnix">
+<Description>
+Helper method to convert a $HOROLOG into UNIX time (seconds since 00:00 Jan 1, 1970 UTC)</Description>
+<Internal>1</Internal>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pTimestamp:%TimeStamp,pIsUTC:%Boolean</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+#define UNIXEPOCH 47117
+#define SECPERDAY 86400
+	#dim tH As %String = $ZDTH(pTimestamp,3)
+	#dim tUTCH As %String = $S(pIsUTC:tH,1:$system.Util.LocalWithZTIMEZONEtoUTC(tH))
+	
+	Quit ((($P(tUTCH,",")-$$$UNIXEPOCH)*$$$SECPERDAY)+$P(tUTCH,",",2))
+]]></Implementation>
+</Method>
+
+<Method name="TimeStampDelta">
+<Description>
+Helper to compute the delta between two timestamps</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pTimestamp:%TimeStamp,pEpoch:%TimeStamp="",pIsUTC:%Boolean</FormalSpec>
+<ReturnType>%Integer</ReturnType>
+<Implementation><![CDATA[
+	If pEpoch="" {
+		// If no epoch is specified, use "now"
+		Set pEpoch = $ZDT($S(pIsUTC:$system.Util.LocalWithZTIMEZONEtoUTC($H),1:$H),3)
+	}
+	
+	#dim tTS1 As %Integer = ..TimeStampToUnix(pTimestamp,pIsUTC)
+	#dim tTS2 As %Integer = ..TimeStampToUnix(pEpoch,pIsUTC)
+	
+	Quit tTS1-tTS2
+]]></Implementation>
+</Method>
+
+<Method name="UTCTimeStamp">
+<Description>
+Helper class to generate a UTC timestamp with optional offset</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pDelta:%Integer=0,pHorolog:%String=$H,pIsUTC:%Boolean=0</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	If pDelta '= 0 {
+		// Recompute the $HOROLOG value to include the delta
+		Set pHorolog = ($P(pHorolog,",",1) + (pDelta / 86400))
+						_ "," _
+					   ($P(pHorolog,",",2) + (pDelta # 86400))
+	}
+	
+	Quit $ZDT($S(pIsUTC:pHorolog,1:$system.Util.LocalWithZTIMEZONEtoUTC(pHorolog)),3)
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Routine name="LoadZENCloudMessaging" type="MAC" languagemode="0" timestamp="63239,55060.631499"><![CDATA[
+ ;
+ 
+ write "Loading ZenCloudMessaging source="_^source.dir,!
+ 
+ //do ##class(%Library.MessageDictionary).Import(^source.dir_"localize/EnsZenCloudMessagingErrors.xml","d")
+ //do Import^%occMessages(^source.dir_"localize/EnsZenCloudMessagingErrors.xml","","EnsZenCloudMessaging")
+ set domain="EnsZenCloudMessaging"
+ set file=^source.dir_"localize/EnsZenCloudMessagingErrors.xml"
+ Set tSC=$$Import^%occMsgXML(file,domain,1) //$$$CheckStatus(tSC)
+ //do ##class(%Library.MessageDictionary).ImportDir(^source.dir_"localize/","d")
+ //zw ^CacheMsg("EnsZenCloudMessaging")
+ //zw ^CacheMsgNames
+ //do ##class(%Library.MessageDictionary).GenerateInclude("EnsZenCloudMessagingErrors","s","EnsZenCloudMessaging",1)
+ Do GenerateInclude^%occMsgXML("EnsZenCloudMessagingErrors",0,domain,1)
+ do $system.OBJ.ImportDir(^source.dir,"*.xml","ckv",.errors,1,.imported)
+ quit
+Test
+	Write "Testing ----",!
+	set deviceToken="04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553"
+	write "deviceToken(",$l(deviceToken),")=",deviceToken,!
+	//do ##class(Test.ZenCloudMessaging.DevProduction).TestAPNS(deviceToken)
+	do ##class(Test.ZenCloudMessaging.DevProduction).TestAPNS(deviceToken,0)
+	quit
+Test2
+	set deviceToken="04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553"
+	set d=##class(%ZEN.proxyObject).%New()
+	set d.Identifier=deviceToken
+	do ##class(Test.ZenCloudMessaging.DevProduction).WelcomeMessageAPNS(d,0)
+	quit
+TestAlert
+	do ##class(Ens.Director).RestartProduction()
+	set alert=##class(Ens.AlertRequest).%New()
+	set alert.AlertDestination = "App1" 	// AppToken here
+	set alert.AlertText = "Alert from Ensemble! Check yourself!"
+	set alert.SourceConfigName = "FooSource"
+	zw alert
+	//set target="Test.ZenCloudMessaging.MasterNodeOperation"
+	set target="Ens.Alert"
+  set sc=##class(EnsLib.Testing.Service).SendTestRequest(target,alert,.response,.seesionIs,1)
+  do $system.Status.DisplayError(sc)
+  zw response
+  quit
+]]></Routine>
+
+
+<Project name="MyZenCloudMessaging" LastModified="2014-02-21 15:40:28.813865">
+  <Items>
+    <ProjectItem name="EnsLib.ZenCloudMessaging" type="PKG"></ProjectItem>
+    <ProjectItem name="LoadZENCloudMessaging.MAC" type="MAC"></ProjectItem>
+    <ProjectItem name="Test" type="PKG"></ProjectItem>
+  </Items>
+</Project>
+
+
+
+
+<Class name="Test.ZenCloudMessaging.DevProduction">
+<Description>
+A test HTTP based production for ebXML</Description>
+<ProcedureBlock>1</ProcedureBlock>
+<Super>Ens.Production</Super>
+<TimeChanged>63239,56215.800984</TimeChanged>
+<TimeCreated>61185,56891.228831</TimeCreated>
+
+<XData name="ProductionDefinition">
+<Data><![CDATA[
+<Production Name="Test.ZenCloudMessaging.DevProduction" TestingEnabled="true" LogGeneralTraceEvents="true">
+  <Description></Description>
+  <ActorPoolSize>2</ActorPoolSize>
+  <Setting Target="Adapter" Name="AlertNotificationOperation"></Setting>
+  <Item Name="EnsLib.ZenCloudMessaging.AppService" Category="" ClassName="EnsLib.ZenCloudMessaging.AppService" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Host" Name="InactivityTimeout">0</Setting>
+    <Setting Target="Host" Name="Target">EnsLib.ZenCloudMessaging.APNS.Operation</Setting>
+  </Item>
+  <Item Name="EnsLib.ZenCloudMessaging.APNS.Operation" Category="" ClassName="EnsLib.ZenCloudMessaging.APNS.Operation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Host" Name="InactivityTimeout">0</Setting>
+    <Setting Target="Host" Name="AlertOnError">1</Setting>
+    <Setting Target="Host" Name="NotificationProtocol">enhanced</Setting>
+    <Setting Target="Host" Name="PushServerAddress">gateway.sandbox.push.apple.com</Setting>
+    <Setting Target="Host" Name="PushServerPort">2195</Setting>
+    <Setting Target="Host" Name="SSLConfig">FOO2</Setting>
+    <Setting Target="Host" Name="AlertGroups">App1</Setting>
+  </Item>
+  <Item Name="Test.ZenCloudMessaging.DeviceEndpoint" Category="" ClassName="Test.ZenCloudMessaging.DeviceEndpoint" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Host" Name="AlertOnError">1</Setting>
+  </Item>
+  <Item Name="Ens.Alert" Category="" ClassName="Test.ZenCloudMessaging.MasterNodeOperation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Adapter" Name="HTTPPort">9990</Setting>
+    <Setting Target="Adapter" Name="HTTPServer">localhost</Setting>
+    <Setting Target="Host" Name="ArchiveIO">1</Setting>
+    <Setting Target="Adapter" Name="URL">/foo</Setting>
+  </Item>
+  <Item Name="Test.ZenCloudMessaging.NodeEndpoint" Category="" ClassName="Test.ZenCloudMessaging.NodeEndpoint" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Adapter" Name="Port">9990</Setting>
+    <Setting Target="Host" Name="TargetConfigName">EnsLib.ZenCloudMessaging.IdentityManager.Process</Setting>
+    <Setting Target="Host" Name="ArchiveIO">1</Setting>
+    <Setting Target="Host" Name="AlertOnError">1</Setting>
+  </Item>
+  <Item Name="EnsLib.ZenCloudMessaging.IdentityManager.Process" Category="" ClassName="EnsLib.ZenCloudMessaging.IdentityManager.Process" PoolSize="0" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Host" Name="NotificationServiceTarget">EnsLib.ZenCloudMessaging.APNS.Operation</Setting>
+    <Setting Target="Host" Name="AlertOnError">1</Setting>
+    <Setting Target="Host" Name="AlertGroups">App1</Setting>
+  </Item>
+</Production>
+]]></Data>
+</XData>
+
+<Method name="TestAPNS">
+<Description>
+Classmethod to test the Apple Push Notification Service business operation</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pDeviceToken:%String,pInProc:%Boolean=1,pIterations:%Integer=1,pNotificationProtocol:%String="enhanced"</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tStartTime  As %Numeric
+		#dim tEndTime    As %Numeric
+		#dim tConfigName As %String = "FooBar"
+		#dim tMsgOut     As EnsLib.ZenCloudMessaging.NotificationRequest
+		#dim tMsgIn      As EnsLib.ZenCloudMessaging.NotificationResponse
+		#dim tIndex      As %Integer
+		#dim tPayload    As %String
+		
+				
+		Set tMsgOut = ##class(EnsLib.ZenCloudMessaging.NotificationRequest).%New()
+		Set tMsgOut.Service = "APNS"
+		Do tMsgOut.Identifiers.Insert(pDeviceToken)
+		Set tMsgOut.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
+		Set tMsgOut.AlertNotification = "ZenCloudMessaging: This is an APNS test @ "_$ZDT($H,3)
+		Set tMsgOut.SoundNotification = 1
+		Set tMsgOut.UrlNotification = "http://www.cnn.com"
+		Do tMsgOut.Data.SetAt("test data","data1")
+		Do tMsgOut.Data.SetAt("test data 2","data2")
+
+		
+		Set tSC=##class(EnsLib.ZenCloudMessaging.APNS.Operation).ConstructAPNSPayload(tMsgOut,.tPayload)
+		Quit:$$$ISERR(tSC)
+		
+		WRITE "Sending: ",tMsgOut,!,tPayload,!
+		
+		Set tStartTime = $ZH
+		For tIndex = 1:1:pIterations {
+		
+			If pInProc {
+				#dim tOp As EnsLib.ZenCloudMessaging.APNS.Operation = ##class(EnsLib.ZenCloudMessaging.APNS.Operation).%New(tConfigName)
+			
+				// Inproc testing
+				Set tOp.PushServerAddress = "gateway.sandbox.push.apple.com"
+				Set tOp.PushServerPort = 2195
+				Set tOp.SSLConfig = "FOO2"
+				Set tOp.NotificationProtocol = pNotificationProtocol
+				Set tSC = tOp.OnInit()
+				Quit:$$$ISERR(tSC)
+				
+				Set tSC = tOp.PushNotification(tMsgOut, .tMsgIn)
+				
+				Do tOp.OnTearDown()
+				
+				//Quit:$$$ISERR(tSC)
+		
+			} Else {
+			
+				#dim tService As EnsLib.ZenCloudMessaging.AppService
+			
+				// Dispatch this message via the business service
+				Set tSC = ##class(Ens.Director).CreateBusinessService("EnsLib.ZenCloudMessaging.AppService",.tService)
+				Quit:$$$ISERR(tSC)
+			
+				// Override the timeout for testing ...
+				Set tService.Timeout = -1
+	
+				// Now, process it
+				Set tSC = tService.ProcessInput(tMsgOut,.tMsgIn,"")
+				//Quit:$$$ISERR(tSC)
+			}
+			
+			Do:$$$ISERR(tSC) $system.OBJ.DisplayError(tSC)
+		}
+		
+		Set tEndTime = $ZH
+
+		If pIterations=1 {
+			WRITE "Received: ",$CASE($GET(tMsgIn),"":"<<No Response>>",:tMsgIn),!
+			If $IsObject($GET(tMsgIn)) {
+				Do tMsgIn.XMLExport(,",indent")
+			}
+		}
+		
+		WRITE !
+		WRITE "Elapsed time: ",tEndTime-tStartTime,"s for ",pIterations," iterations"
+		WRITE:pIterations>1 ", that's ",$J((tEndTime-tStartTime)/pIterations,0,4),"s/iteration"
+		WRITE !
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$ERROR($$$CacheError,$ZE)
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="TestGCM">
+<Description>
+Classmethod to test the Google Cloud Messaging business operation</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pApiKey:%String,pRegId:%String,pInProc:%Boolean=1,pIterations:%Integer=1</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tStartTime  As %Numeric
+		#dim tEndTime    As %Numeric
+		#dim tConfigName As %String = "FooBar"
+		#dim tMsgOut     As EnsLib.ZenCloudMessaging.NotificationRequest
+		#dim tMsgIn      As EnsLib.ZenCloudMessaging.NotificationResponse
+		#dim tIndex      As %Integer
+		#dim tPayload    As %String
+		
+				
+		Set tMsgOut = ##class(EnsLib.ZenCloudMessaging.NotificationRequest).%New()
+		Set tMsgOut.Service = "GCM"
+		Set tMsgOut.AppIdentifier = pApiKey
+		Do tMsgOut.Identifiers.Insert(pRegId)
+		Set tMsgOut.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
+		Set tMsgOut.AlertNotification = "ZenCloudMessaging: This is a GCM test @ "_$ZDT($H,3)
+		Set tMsgOut.SoundNotification = 1
+		Set tMsgOut.UrlNotification = "http://www.cnn.com"
+		Do tMsgOut.Data.SetAt("test data","data1")
+		Do tMsgOut.Data.SetAt("test data 2","data2")
+		
+		Set tSC=##class(EnsLib.ZenCloudMessaging.GCM.Operation).ConstructGCMHTTPPayload(tMsgOut,.tPayload)
+		Quit:$$$ISERR(tSC)
+		
+		WRITE "Sending: ",tMsgOut,!,tPayload,!
+		
+		Set tStartTime = $ZH
+		For tIndex = 1:1:pIterations {
+		
+			If pInProc {
+				#dim tOp As EnsLib.ZenCloudMessaging.GCM.Operation = ##class(EnsLib.ZenCloudMessaging.GCM.Operation).%New(tConfigName)
+			
+				// Inproc testing
+				Set tOp.SSLConfig = "ZMAPNS"
+				Set tOp.NotificationProtocol = "http"
+				Set tSC = tOp.OnInit()
+				Quit:$$$ISERR(tSC)
+				
+				WRITE "Server: ",tOp.PushServer,!
+				
+				Set tSC = tOp.PushNotification(tMsgOut, .tMsgIn)
+				
+				Do tOp.OnTearDown()
+				
+				//Quit:$$$ISERR(tSC)
+		
+			} Else {
+			
+				#dim tService As EnsLib.ZenCloudMessaging.AppService
+			
+				// Dispatch this message via the business service
+				Set tSC = ##class(Ens.Director).CreateBusinessService("EnsLib.ZenCloudMessaging.AppService",.tService)
+				Quit:$$$ISERR(tSC)
+			
+				// Override the timeout for testing ...
+				Set tService.Timeout = -1
+	
+				// Now, process it
+				Set tSC = tService.ProcessInput(tMsgOut,.tMsgIn,"")
+				//Quit:$$$ISERR(tSC)
+			}
+			
+			Do:$$$ISERR(tSC) $system.OBJ.DisplayError(tSC)
+		}
+		
+		Set tEndTime = $ZH
+
+		If pIterations=1 {
+			WRITE "Received: ",$CASE($GET(tMsgIn),"":"<<No Response>>",:tMsgIn),!
+			If $IsObject($GET(tMsgIn)) {
+				Do tMsgIn.XMLExport(,",indent")
+			}
+		}
+		
+		WRITE !
+		WRITE "Elapsed time: ",tEndTime-tStartTime,"s for ",pIterations," iterations"
+		WRITE:pIterations>1 ", that's ",$J((tEndTime-tStartTime)/pIterations,0,4),"s/iteration"
+		WRITE !
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$ERROR($$$CacheError,$ZE)
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="WelcomeMessageAPNS">
+<Description>
+Classmethod to test the Apple Push Notification Service business operation</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>device,pInProc:%Boolean=1,pIterations:%Integer=1,pNotificationProtocol:%String="enhanced"</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tStartTime  As %Numeric
+		#dim tEndTime    As %Numeric
+		#dim tConfigName As %String = "FooBar"
+		#dim tMsgOut     As EnsLib.ZenCloudMessaging.NotificationRequest
+		#dim tMsgIn      As EnsLib.ZenCloudMessaging.NotificationResponse
+		#dim tIndex      As %Integer
+		#dim tPayload    As %String
+		
+		Set pDeviceToken = device.Identifier
+		Set tMsgOut = ##class(EnsLib.ZenCloudMessaging.NotificationRequest).%New()
+		Set tMsgOut.Service = "APNS"
+		Do tMsgOut.Identifiers.Insert(pDeviceToken)
+		Set tMsgOut.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
+		Set tMsgOut.AlertNotification = "Welcome to ZenCloudMessaging! You have successfully registered your device @ "_$ZDT($H,3)
+		//Set tMsgOut.AlertNotification = "ZenCloudMessaging: Welcome to ZenCloudMessaging!"
+
+		Set tMsgOut.SoundNotification = 1
+		Set tMsgOut.UrlNotification = "http://www.cnn.com"
+		Do tMsgOut.Data.SetAt(device.AppIdentifier,"AppIdentifier")
+		Do tMsgOut.Data.SetAt(device.AppToken,"AppToken")
+
+		
+		Set tSC=##class(EnsLib.ZenCloudMessaging.APNS.Operation).ConstructAPNSPayload(tMsgOut,.tPayload)
+		Quit:$$$ISERR(tSC)
+		
+		//WRITE "Sending: ",tMsgOut,!,tPayload,!
+		
+		Set tStartTime = $ZH
+		For tIndex = 1:1:pIterations {
+		
+			If pInProc {
+				#dim tOp As EnsLib.ZenCloudMessaging.APNS.Operation = ##class(EnsLib.ZenCloudMessaging.APNS.Operation).%New(tConfigName)
+			
+				// Inproc testing
+				Set tOp.PushServerAddress = "gateway.sandbox.push.apple.com"
+				Set tOp.PushServerPort = 2195
+				Set tOp.SSLConfig = "FOO2"
+				Set tOp.NotificationProtocol = pNotificationProtocol
+				Set tSC = tOp.OnInit()
+				Quit:$$$ISERR(tSC)
+				
+				Set tSC = tOp.PushNotification(tMsgOut, .tMsgIn)
+				
+				Do tOp.OnTearDown()
+				
+				//Quit:$$$ISERR(tSC)
+		
+			} Else {
+			
+				#dim tService As EnsLib.ZenCloudMessaging.AppService
+			
+				// Dispatch this message via the business service
+				Set tSC = ##class(Ens.Director).CreateBusinessService("EnsLib.ZenCloudMessaging.AppService",.tService)
+				Quit:$$$ISERR(tSC)
+			
+				// Override the timeout for testing ...
+				Set tService.Timeout = -1
+	
+				// Now, process it
+				Set tSC = tService.ProcessInput(tMsgOut,.tMsgIn,"")
+				//Quit:$$$ISERR(tSC)
+			}
+			
+			throw:$$$ISERR(tSC) ##class(%Exception.StatusException).CreateFromStatus(tSC)
+		}
+		
+		Set tEndTime = $ZH
+
+		If pIterations=1 {
+			//WRITE "Received: ",$CASE($GET(tMsgIn),"":"<<No Response>>",:tMsgIn),!
+			If $IsObject($GET(tMsgIn)) {
+				//Do tMsgIn.XMLExport(,",indent")
+			}
+		}
+		
+	//	WRITE !
+	//	WRITE "Elapsed time: ",tEndTime-tStartTime,"s for ",pIterations," iterations"
+	//	WRITE:pIterations>1 ", that's ",$J((tEndTime-tStartTime)/pIterations,0,4),"s/iteration"
+	//	WRITE !
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$ERROR($$$CacheError,$ZE)
+	Goto Exit
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Class name="Test.ZenCloudMessaging.DeviceEndpoint">
+<Description>
+REST service which allows a device to:
+1. register it self for notification
+2. UN-register itself
+3. specify certain kinds of "events" to get notifications for</Description>
+<Super>EnsLib.HTTP.Service</Super>
+<TimeChanged>63239,49636.318126</TimeChanged>
+<TimeCreated>63238,43375.844326</TimeCreated>
+
+<UDLText name="T">
+<Content><![CDATA[
+/*
+XData Routes
+{
+<Routes>
+	<Route Url="/register" Method="POST" Call="register"/>
+	<Route Url="/register" Method="DELETE" Call="unregister"/>
+	<Route Url="/subscribe" Method="POST" Call="subscribe"/>
+	<Route Url="/subscribe" Method="DELETE" Call="unsubscribe"/>
+	<route Url="/:deviceId" Method="GET" Call="getDeviceInfo"/>
+	</Routes>
+}
+*/
+]]></Content>
+</UDLText>
+
+<Method name="echo">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>pInput:%Stream.Object,*pOutput:%Stream.Object</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set pOutput=##class(%Stream.TmpBinary).%New()
+	do pInput.Rewind()
+	while ( 'pInput.AtEnd ) {
+		do pOutput.Write( pInput.Read() )
+	}
+	quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="OnProcessInput">
+<FormalSpec>pInput:%Stream.Object,*pOutput:%Stream.Object</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	try {
+		
+		$$$TRACE("OnProcessInput")
+		merge ^http($i(^http))=pInput.Attributes
+		set method=pInput.Attributes("HttpRequest")
+		set url = $zconvert(pInput.Attributes("URL"),"l")
+		
+		if ( url = "/echo" ) {
+			do ..echo(pInput,.pOutput)
+		} elseif ( url = "/hello" ) {
+			Set pOutput=##class(%Stream.TmpCharacter).%New()
+
+			do pOutput.WriteLine("Hello")
+		} else {
+			do $method($this,method,url,pInput,.pOutput)
+			
+		}
+		
+	} catch error {
+		$$$TRACE("error ----> " _ error.DisplayString())
+		Set pOutput=##class(%Stream.TmpCharacter).%New()
+		do pOutput.Write( error.DisplayString() ) 
+		throw error
+	}
+	quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="GET">
+<FormalSpec>url:%String,in:%Stream.Object,*out:%Stream.Object</FormalSpec>
+<Implementation><![CDATA[
+	$$$TRACE("GET url="_url)
+	set deviceId=$extract(url,2,*)
+	do ..getDeviceInfo( deviceId, in, .out)
+]]></Implementation>
+</Method>
+
+<Method name="POST">
+<FormalSpec>url:%String,in:%Stream.Object,*out:%Stream.Object</FormalSpec>
+<Implementation><![CDATA[
+	$$$TRACE("POST url="_url)
+	
+	if ( url["register" ) {
+		do ..register(in, .out, .device)
+		if ( url["register+notify" ) {
+			do ..welcome(device)
+		}
+		quit
+	}
+]]></Implementation>
+</Method>
+
+<Method name="welcome">
+<Description>
+Send a welcome message to this device</Description>
+<FormalSpec>device</FormalSpec>
+<Implementation><![CDATA[
+	set ^zcm.log($i(^zcm.log))=$lb($zts,"Sending welcome",device.Identifier)
+	do ##class(Test.ZenCloudMessaging.DevProduction).WelcomeMessageAPNS(device,0)
+]]></Implementation>
+</Method>
+
+<Method name="DELETE">
+<FormalSpec>url:%String,in:%Stream.Object,*out:%Stream.Object</FormalSpec>
+<Implementation><![CDATA[
+	$$$TRACE("DELETE url="_url)
+	if ( url["unregister" ) {
+		do ..unregister(in,.out)
+		quit
+	}
+]]></Implementation>
+</Method>
+
+<Method name="getDeviceInfo">
+<FormalSpec>deviceId,in,*out</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	try {
+			set out = ##class(%GlobalBinaryStream).%New()
+		set pDevice = $$$NULLOREF
+		set SQLCODE=0
+		&sql(SELECT %ID INTO :tId
+				FROM EnsLib_ZenCloudMessaging_IdentityManager.DeviceTracking
+				WHERE  Identifier= :deviceId)
+
+		$$$TRACE("deviceId="_deviceId_" SQLCODE="_SQLCODE)
+		if SQLCODE=0 {
+			
+			// Open the object ...
+			set pDevice = ##class(EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking).%OpenId(tId)
+			$$$TRACE("Found device="_pDevice)
+			//do ##class(%ZEN.Auxiliary.jsonProvider).%ObjectToJSON(pDevice,,,"w")
+		
+			do ##class(%ZEN.Auxiliary.jsonProvider).%WriteJSONStreamFromObject(out,pDevice,,,,"w")
+			return $$$OK
+			
+		} elseif SQLCODE'=100 {
+			// Some other error
+			throw ##class(%Exception.StatusException).CreateFromStatus($$$ERROR($$$SQLError,SQLCODE,$G(%msg)))
+		}
+		// Else SQLCODE=100 means not found 
+		do ..HTTP404(.out,"{ ""msg"":""Sorry Charlie..."" }")
+	} catch error {
+		return error.AsStatus()
+	}
+]]></Implementation>
+</Method>
+
+<Method name="HTTP404">
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[&output:%Stream.Object,message:%String]]></FormalSpec>
+<Implementation><![CDATA[
+		Set output.Attributes("Content-Type")=" text/plain; charset=""UTF-8"""
+		Set output.Attributes("ResponseCode")="404 Not Found"
+    //Set out.Attributes("X-Message")="Sorry Charlie"
+    do:$l(message)>0 output.WriteLine(message)
+]]></Implementation>
+</Method>
+
+<Method name="parseRequestBody">
+<Description>
+Return a proxyObject for the JSON request body</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec>input:%Stream.Object</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	do input.Rewind()
+	set json=""
+	while ( 'input.AtEnd ) { set json=json_input.Read() }
+	$$$TRACE("json("_input.Size_")="_json)
+	$$$THROWONERROR(sc,##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(json,,.obj))
+	return obj
+]]></Implementation>
+</Method>
+
+<Method name="parseDeviceRequestBody">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>input:%Stream.Object</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	do input.Rewind()
+	set json=""
+	while ( 'input.AtEnd ) { set json=json_input.Read() }
+	$$$TRACE("json="_json)
+	
+	$$$THROWONERROR(sc,##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(json,,.obj))
+	do obj.%CopyToArray(.array)
+	m ^a($i(^a))=array
+	return obj
+]]></Implementation>
+</Method>
+
+<Method name="validateObject">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>object,props</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set errors=""
+	for i=1:1:$listlength(props) {
+		set value=$property(object,$list(props,i))
+		if ( $length(value)=0 ) {
+			set $list(errors,i)="Missing '"_$list(props,i)_"' from object"
+		}
+	}
+	if ( $listlength(errors) > 0 ) {
+		return $$$ERROR($listtostring(errors),", ")
+	}
+	return $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="register">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>input:%Stream.Object,*output:%Stream.Object,*obj</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set obj=..parseDeviceRequestBody(input)
+	$$$THROWONERROR(sc,..validateObject(obj,$listbuild("Identifier","AppIdentifier","Service","AppToken")))
+	set sc=##class(EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking).AssociateDeviceWithAppToken(
+			obj.Identifier,
+			obj.AppIdentifier,
+			obj.Service,
+			obj.AppToken)
+	$$$THROWONERROR(sc,sc)
+]]></Implementation>
+</Method>
+
+<Method name="unregister">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>input:%Stream.Object,*output:%Stream.Object</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set obj=..parseDeviceRequestBody(input)
+	$$$THROWONERROR(sc,..validateObject(obj,$listbuild("Identifier","AppIdentifier","Service","AppToken")))
+	set sc=##class(EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking).DisassociateDeviceWithAppToken(
+			obj.Identifier,
+			obj.AppIdentifier,
+			obj.Service,
+			obj.AppToken)
+	$$$TRACE("unregister sc="_sc)
+	$$$THROWONERROR(sc,sc)
+]]></Implementation>
+</Method>
+
+<Method name="bootstrap">
+<ClassMethod>1</ClassMethod>
+<CodeMode>objectgenerator</CodeMode>
+<Implementation><![CDATA[
+	write !,"Bootstrapping",!
+	write "WARNING! Not meant for production systems!",!
+	for prefix="%DeepSee","%SOAP","%UnitTest","%ZEN","Test" {
+		set ^["%SYS"]SYS("Security","CSP","AllowPrefix",0,prefix_".")=1
+
+	}
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Class name="Test.ZenCloudMessaging.MasterNodeOperation">
+<Description>
+Operation to send notifications to the master node</Description>
+<Super>EnsLib.HTTP.GenericOperation</Super>
+<TimeChanged>63239,53350.427879</TimeChanged>
+<TimeCreated>63239,42784.673175</TimeCreated>
+
+<Parameter name="INVOCATION">
+<Default>Queue</Default>
+</Parameter>
+
+<Property name="NodeId">
+<Description>
+Unique identifier for this node. </Description>
+<Type>%String</Type>
+<Calculated>1</Calculated>
+<Required>1</Required>
+<ReadOnly>1</ReadOnly>
+<Parameter name="MAXLEN" value="256"/>
+</Property>
+
+<Parameter name="SETTINGS">
+<Default>NodeId</Default>
+</Parameter>
+
+<Method name="NodeIdGet">
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	do ##class(Ens.Director).GetProductionStatus(.production)
+	do ..GetSettings(.settings)
+	set operation = ..%ConfigName
+	set host=$SYSTEM.INetInfo.LocalHostName()
+	//return production_":"_operation_"@"_host
+	return production_"@"_host
+]]></Implementation>
+</Method>
+
+<XData name="MessageMap">
+<Data><![CDATA[
+<MapItems>
+	<MapItem MessageType="Ens.AlertRequest"> 
+		<Method>SendNotification</Method>
+	</MapItem>
+</MapItems>
+]]></Data>
+</XData>
+
+<Method name="SendNotification">
+<FormalSpec>request:Ens.AlertRequest,*response:Ens.Response</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	try {
+		$$$TRACE("Got request="_request.AlertText)
+		set notification = ##class(%ZEN.proxyObject).%New()
+		set notification.NodeId = ..NodeId
+		set notification.SourceConfigName = request.SourceConfigName
+		set notification.AppToken = request.AlertDestination
+		set notification.TimeStamp = request.AlertTime
+		set notification.Text = request.AlertText
+		
+		set messageStream=##class(%GlobalCharacterStream).%New()
+		//set message.Stream=##class(%Stream.TmpCharacter).%New()
+		
+		do ##class(%ZEN.Auxiliary.jsonProvider).%WriteJSONStreamFromObject(messageStream,notification,,,,"w")
+		
+		set t=""
+		do messageStream.Rewind()
+		while ( 'messageStream.AtEnd ) { set t=t_messageStream.Read() }
+		$$$TRACE("messageStream="_t)
+		
+		set messageStream.Attributes("httprequest")="POST"
+		set messageStream.Attributes("content-type")="application/json"
+		set messageStream.Attributes("content-length")=messageStream.Size
+		do messageStream.Rewind()
+
+		set message = ##class(EnsLib.HTTP.GenericMessage).%New(messageStream,,messageStream)
+		
+		/*
+		do message.HTTPHeaders.SetAt("httprequest","POST")
+		do message.HTTPHeaders.SetAt("content-type","application/json")
+		do message.HTTPHeaders.SetAt("content-size",messageStream.Size)
+		*/
+		
+		$$$TRACE("message.Stream.Size="_message.Stream.Size)
+	
+		$$$THROWONERROR(sc,..OnMessage(message,.response))
+		
+		/*
+	
+		*/
+		
+		return $$$OK
+	} catch error {
+		
+		return error.AsStatus()
+	}
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Class name="Test.ZenCloudMessaging.NodeEndpoint">
+<Description>
+A rest endpoint for HealthShare node to communicate notifications to.
+This master node will take care of sending the notifications to users.
+AppTokens are used to map which messages go to which users.</Description>
+<Super>EnsLib.HTTP.Service</Super>
+<TimeChanged>63239,55379.593853</TimeChanged>
+<TimeCreated>63239,42637.749527</TimeCreated>
+
+<Property name="TargetConfigName">
+<Description>
+Configuration item(s) to which to send notification requests
+This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="1000"/>
+</Property>
+
+<Parameter name="SETTINGS">
+<Default><![CDATA[TargetConfigName:Basic:selector?multiSelect=0&context={Ens.ContextSearch/ProductionItems?targets=1&productionName=@productionId}]]></Default>
+</Parameter>
+
+<Method name="OnProcessInput">
+<FormalSpec>pInput:%Stream.Object,*pOutput:%Stream.Object</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	try {
+		
+		$$$TRACE("OnProcessInput")
+		merge ^http($i(^http))=pInput.Attributes
+		set method=pInput.Attributes("HttpRequest")
+		set url = $zconvert(pInput.Attributes("URL"),"l")
+		
+		if ( url = "/echo" ) {
+			do ##class(Test.ZenCloudMessaging.DeviceEndpoint).echo(pInput,.pOutput)
+		} elseif ( url = "/hello" ) {
+			Set pOutput=##class(%Stream.TmpCharacter).%New()
+
+			do pOutput.WriteLine("Hello")
+		} else {
+			do $method($this,method,pInput.Attributes("URL"),pInput,.pOutput)
+			
+		}
+		
+	} catch error {
+		$$$TRACE("error ----> " _ error.DisplayString())
+		Set pOutput=##class(%Stream.TmpCharacter).%New()
+		do pOutput.Write( error.DisplayString() ) 
+		throw error
+	}
+	quit $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="testAlert">
+<FormalSpec>url:%String,input:%Stream.Object,*out:%Stream.Object</FormalSpec>
+<Implementation><![CDATA[
+	set appToken = $piece(url,"/",$l(url,"/"))
+	set alert=##class(Ens.AlertRequest).%New()
+	set alert.AlertDestination = appToken
+	set content = ""
+	do input.Rewind()
+	while ( 'input.AtEnd ) { set content = content _ input.Read() }
+	set alert.AlertText = content
+	$$$THROWONERROR(sc,..SendAlert(alert))
+	set out = ##class(%Stream.TmpCharacter).%New()
+	do out.WriteLine("OK")
+]]></Implementation>
+</Method>
+
+<Method name="POST">
+<FormalSpec>url:%String,input:%Stream.Object,*out:%Stream.Object</FormalSpec>
+<Implementation><![CDATA[
+	if ( url [ "/testalert/" ) {
+		write "TEST ALERT!!!"
+		do ..testAlert(url,input,.output)
+		quit
+	}
+	set note=##class(Test.ZenCloudMessaging.DeviceEndpoint).parseRequestBody(input)
+	//Send this alert to everyone registered for the given AppToken
+	set req=##class(EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest).%New()
+	set req.AssociatedAppToken = note.AppToken
+	Set req.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
+	Set req.AlertNotification = note.Text
+	Set req.SoundNotification = 1
+	Set req.UrlNotification = "http://www.cnn.com"
+	Do req.Data.SetAt(note.SourceConfigName,"SourceConfigName")
+	Do req.Data.SetAt(note.TimeStamp,"TimeStamp")
+	//Do req.Data.SetAt(note.NodeId,"NodeId")
+	
+	$$$THROWONERROR(sc,..SendRequestAsync(..TargetConfigName,req))
+	set out=##class(%Stream.TmpCharacter).%New()
+	do out.WriteLine("OK")
+]]></Implementation>
+</Method>
+</Class>
+</Export>

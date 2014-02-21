@@ -1,0 +1,148 @@
+  223  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  227  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  228  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  229  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  230  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  231  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  233  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  235  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  236  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  237  curl -v -X POST --data-binary @MDM.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  243  curl -v -X POST --data-binary @MDM.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  244  curl -v -X POST --data-binary @MDM.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  248  curl -v -X POST --data-binary @MDM.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  250  curl -v -X POST --data-binary @MDM.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  251  curl -v -X POST --data-binary @MDM.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  252  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  331  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57780/hello/jason
+  332  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  333  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  334  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  335  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  336  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  337  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  338  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  339  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  340  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  341  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  342  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  343  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  344  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  345  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  346  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  347  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  348  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  349  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  350  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  351  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  352  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  353  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  354  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  355  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  356  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  357  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  358  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  359  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  360  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  361  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/hello/jason
+  362  curl -v -X GET http://_system:SYS@varian.sandbox.healthshare.us:57781/Patient/1
+  402  curl -X GET http://hl7.org/documentcenter/public/standards/FHIR/fhir-all-xsd.zip > ../fhir-all-xsd.zip
+  441  history | grep curl
+  442  curl -v -X POST --data-binary @HPrim.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  443  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  444  history | grep curl
+  445  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  446  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  447  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  448  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  449  curl -v -X POST --data-binary @DFT.xml http://_system:SYS@varian.sandbox.healthshare.us:57777/varian/event
+  607  curl -v -X POST http://_system:SYS@localhost:57774/csp/ensdemo/Test.ZenCloudMessaging.DeviceEndpoint.cls/foo
+  608  curl -v -X POST http://_system:SYS@localhost:9980/echo
+  609  curl -v -X POST http://_system:SYS@localhost:9980/hello
+  610  curl -v -X POST http://_system:SYS@localhost:9980/hello
+  611  curl -v -X POST http://_system:SYS@localhost:9980/hello
+  612  curl -v -X POST http://localhost:9980/hello
+  613  curl -v -X GET http://localhost:9980/hello
+  614  curl -v -X GET http://localhost:9980/hello
+  615  curl -v -X GET http://localhost:9980/hello
+  616  curl -v -X GET http://localhost:9980/hello
+  617  curl -v -X GET http://localhost:9980/hello
+  618  curl -v -X GET http://localhost:9980/hello
+  619  curl -v -X GET http://localhost:9980/hello
+  620  curl -v -X GET http://localhost:9980/hello
+  621  curl -v -X GET http://localhost:9980/hello
+  622  curl -v -X GET http://localhost:9980/hello
+  623  curl -v -X GET http://localhost:9980/092180238102398120938
+  624  curl -v -X GET http://localhost:9980/092180238102398120938
+  625  curl -v -X GET http://localhost:9980/092180238102398120938
+  626  curl -v -X GET http://localhost:9980/092180238102398120938
+  627  curl -v -X GET http://localhost:9980/092180238102398120938
+  629  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980
+  631  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  632  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/register
+  633  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/register
+  634  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/register
+  635  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/register
+  636  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/register
+  638  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/register
+  639  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/register
+  640  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  641  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  642  curl -v -X GET http://localhost:9980/deviceId09u20ffffffffff
+  643  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  644  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  645  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  646  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  647  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  648  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  649  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  650  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  651  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  652  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  653  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  654  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  655  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  656  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  657  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  658  curl -v -X GET http://localhost:9980/deviceId09u20ffffffffff
+  659  curl -v -X GET http://localhost:9980/deviceId09u20ffffffffff
+  660  curl -v -X GET http://localhost:9980/deviceId09u20ffffffffff
+  661  curl -v -X GET http://localhost:9980/deviceId09u20ffffffffff
+  662  curl -v -X GET http://localhost:9980/deviceId09u20ffffffffff
+  663  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/unregister
+  664  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  665  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/unregister
+  666  curl -v -X POST --data-binary @sample.device.1.json http://localhost:9980/unregister
+  670  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/register
+  671  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  672  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  673  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  674  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  676  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  678  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/register
+  679  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  680  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  681  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  686  curl -v -X POST --data-binary @sample.device.1.bar.json http://localhost:9980/register
+  689  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  690  curl -v -X DELETE --data-binary @sample.device.1.bar.json http://localhost:9980/unregister
+  691  curl -v -X GET http://localhost:9980/deviceId09u2093u20932u309u
+  694  history | grep curl
+  695  curl -v -X GET http://192.168.1.135:5774/04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553
+  696  curl -v -X GET http://192.168.1.135:57774/04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553
+  697  history | grep curl
+  698  curl -v -X GET http://192.168.1.135:9980/04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553
+  699  curl -v -X GET http://192.168.1.135:9980/04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553
+  708  history | grep curl
+  709  man curl
+  710  curl -v -X POST --data "Hello Test Alert" http://localhost:9980/App1
+  711  curl -v -X POST --data "Hello Test Alert" http://localhost:9980/testalert/App1
+  712  curl -v -X POST --data "Hello Test Alert" http://localhost:9980/testalert/App1
+  713  curl -v -X POST --data "Hello Test Alert" http://localhost:9980/testalert/App1
+  714  curl -v -X POST --data "Hello Test Alert" http://localhost:9980/testalert/App1
+  715  curl -v -X POST --data "Hello Test Alert" http://localhost:9980/testalert/App1
+  716  curl -v -X POST --data "Hello Test Alert" http://localhost:9990/testalert/App1
+  717  curl -v -X POST --data "Hello Test Alert" http://localhost:9990/testalert/App1
+  718  curl -v -X POST --data "Hello Dude" http://localhost:9990/testalert/App1
+  719  curl -v -X POST --data "Hi Isabella, I love you" http://localhost:9990/testalert/App1
+  721  history | grep curl > history.curl.txt

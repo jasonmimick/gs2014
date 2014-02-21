@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<SSLConfigsExport>
+  <SSLConfigs>
+    <CAFile>/Users/jmimick/Documents/apple.ca.cer</CAFile>
+    <CertificateFile>/Users/jmimick/work/gs2014/apns.cert.pem</CertificateFile>
+    <CipherList>TLSv1:SSLv3:!ADH:!LOW:!EXP:@STRENGTH</CipherList>
+    <Enabled>true</Enabled>
+    <Name>FOO2</Name>
+    <PrivateKeyFile>/Users/jmimick/work/gs2014/apns.privatekey.pem</PrivateKeyFile>
+    <PrivateKeyType>2</PrivateKeyType>
+    <Protocols>6</Protocols>
+    <Type>false</Type>
+    <VerifyDepth>9</VerifyDepth>
+    <VerifyPeer>1</VerifyPeer>
+  </SSLConfigs>
+</SSLConfigsExport>

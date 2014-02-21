@@ -1,0 +1,22 @@
+ ;
+ 
+ write "Loading ZenCloudMessaging source="_^source.dir,!
+ 
+ //do ##class(%Library.MessageDictionary).Import(^source.dir_"localize/EnsZenCloudMessagingErrors.xml","d")
+ //do Import^%occMessages(^source.dir_"localize/EnsZenCloudMessagingErrors.xml","","EnsZenCloudMessaging")
+ set domain="EnsZenCloudMessaging"
+ set file=^source.dir_"localize/EnsZenCloudMessagingErrors.xml"
+ Set tSC=$$Import^%occMsgXML(file,domain,1) //$$$CheckStatus(tSC)
+ //do ##class(%Library.MessageDictionary).ImportDir(^source.dir_"localize/","d")
+ //zw ^CacheMsg("EnsZenCloudMessaging")
+ //zw ^CacheMsgNames
+ //do ##class(%Library.MessageDictionary).GenerateInclude("EnsZenCloudMessagingErrors","s","EnsZenCloudMessaging",1)
+ Do GenerateInclude^%occMsgXML("EnsZenCloudMessagingErrors",0,domain,1)
+ do $system.OBJ.ImportDir(^source.dir,"*.xml","ckv",.errors,1,.imported)
+ quit
+Test
+	Write "Testing ----",!
+	set deviceToken="04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553"
+	write "deviceToken(",$l(deviceToken),")=",deviceToken,!
+	do ##class(Test.ZenCloudMessaging.DevProduction).TestAPNS(deviceToken)
+	//do ##class(Test.ZenCloudMessaging.DevProduction).TestAPNS(deviceToken,0)
