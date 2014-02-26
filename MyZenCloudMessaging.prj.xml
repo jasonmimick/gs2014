@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-02-21 15:45:59">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-02-26 15:01:44">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -621,7 +621,7 @@ ItsATrap
 Interfaces with the Google Cloud Messaging Service</Description>
 <IncludeCode>EnsZenCloudMessaging</IncludeCode>
 <Super>Ens.BusinessOperation</Super>
-<TimeChanged>63237,58550.73539</TimeChanged>
+<TimeChanged>63242,48064.487093</TimeChanged>
 <TimeCreated>62998,69768.114252</TimeCreated>
 
 <Property name="NotificationProtocol">
@@ -701,11 +701,13 @@ Interfaces with the Google Cloud Messaging Service</Description>
 		Quit:$$$ISERR(tSC)
 		
 		Set ..HttpRequest.ContentType = "application/json"
-		Do ..HttpRequest.SetHeader("Authorization", "key=" _ pRequest.AppIdentifier)
+		//Do ..HttpRequest.SetHeader("Authorization", "key=" _ pRequest.AppIdentifier)
+		Do ..HttpRequest.SetHeader("Authorization", "Bearer " _ pRequest.AppIdentifier)
 		
 		Do ..HttpRequest.EntityBody.Write(tPayload)
 		Do ..HttpRequest.EntityBody.Rewind()
 		
+		Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*),1)
 		Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*))
 		Quit:$$$ISERR(tSC)
 
@@ -938,22 +940,406 @@ This user callback method is called from %OnClose()</Description>
 </Class>
 
 
+<Class name="EnsLib.ZenCloudMessaging.GCMChrome.Operation">
+<Description>
+Interfaces with the Google Cloud Messaging Service</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>Ens.BusinessOperation</Super>
+<TimeChanged>63244,45482.967885</TimeChanged>
+<TimeCreated>63243,57688.148914</TimeCreated>
+
+<Property name="NotificationProtocol">
+<Type>%String</Type>
+<Required>1</Required>
+<Parameter name="DISPLAYLIST" value=",HTTP"/>
+<Parameter name="VALUELIST" value=",http"/>
+</Property>
+
+<Property name="PushServer">
+<Type>%String</Type>
+<InitialExpression>"https://www.googleapis.com/gcm_for_chrome/v1/messages"</InitialExpression>
+<Required>1</Required>
+<Parameter name="MAXLEN" value="2048"/>
+</Property>
+
+<Property name="ClientSecret">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="2048"/>
+</Property>
+
+<Property name="ClientId">
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+</Property>
+
+<Property name="RefreshToken">
+<Description>
+This is the refresh_token from the OAuth2 google apis</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+</Property>
+
+<Property name="AccessToken">
+<Description>
+The access_token which we get some the refresh_token</Description>
+<Type>%String</Type>
+<Parameter name="MAXLEN"/>
+</Property>
+
+<Property name="SSLConfig">
+<Type>%String</Type>
+</Property>
+
+<Property name="Timeout">
+<Type>%Integer</Type>
+<InitialExpression>30</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Property name="Adapter">
+<Type>Ens.OutboundAdapter</Type>
+</Property>
+
+<Property name="HttpRequest">
+<Type>%Net.HttpRequest</Type>
+</Property>
+
+<Parameter name="INVOCATION">
+<Default>Queue</Default>
+</Parameter>
+
+<Parameter name="SETTINGS">
+<Default>NotificationProtocol,PushServer,ClientSecret,ClientId,RefreshToken,SSLConfig,Timeout</Default>
+</Parameter>
+
+<Parameter name="SERVICETYPE">
+<Type>%String</Type>
+<Default>GCMCHROME</Default>
+</Parameter>
+
+<Property name="RefreshAccessTimestamp">
+<Type>%String</Type>
+</Property>
+
+<Method name="PushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	If pRequest.Service'=..#SERVICETYPE {
+		Quit $$$ERROR($$$EnsZenCloudMessagingErrIncompatibleNotificationType,pRequest.Service,..#SERVICETYPE)
+	} Else {
+		Quit ..HTTPPushNotification(pRequest,.pResponse)
+	}
+]]></Implementation>
+</Method>
+
+<Method name="HTTPPushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tMsg As %String
+		#dim tReply As %String
+		#dim tPayload As %String
+		#dim tGCMResponse As %ZEN.proxyObject
+		
+		//Check if we need to get a new access_token, did we expire?
+		// It should expire every 60 minutes, we'll refresh after 50
+		set now=$ZTS
+		$$$TRACE("..AccessToken="_..AccessToken)
+		set needToRefresh=(..AccessToken="")
+		if ( 'needToRefresh ) {
+			set needToRefresh= ( $p(now,",",2)-$p(..RefreshAccessTimestamp,",",2) > (60*50) ) 
+		}
+		if (needToRefresh) {
+			try {
+				Do ..RefreshAccessToken()
+				Set ..RefreshAccessTimestamp=now
+				$$$TRACE("Refreshed! ..RefreshAccessTimestamp="_..RefreshAccessTimestamp)
+			} catch error {
+				return error.AsStatus()
+			}
+		}
+		Set tSC = ..ConstructGCMCHROMEHTTPPayload(pRequest,.tPayload)
+		Quit:$$$ISERR(tSC)
+		
+		Set ..HttpRequest.ContentType = "application/json"
+		//Do ..HttpRequest.SetHeader("Authorization", "key=" _ pRequest.AppIdentifier)
+		$$$TRACE("Bearer " _ ..AccessToken)
+		Do ..HttpRequest.SetHeader("Authorization", "Bearer " _ ..AccessToken)
+		
+		Do ..HttpRequest.EntityBody.Write(tPayload)
+		Do ..HttpRequest.EntityBody.Rewind()
+		
+		Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*),1)
+		Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*))
+		Quit:$$$ISERR(tSC)
+
+		#dim tHttpResponse As %Net.HttpResponse = ..HttpRequest.HttpResponse
+		
+		If '$IsObject(tHttpResponse) {
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrGCMConnectionFailed,..PushServer)
+			Quit
+		}
+		
+		// We expect a 204 - that is success!
+		$$$TRACE("tHttpResponse.StatusCode="_tHttpResponse.StatusCode)
+		
+		If +tHttpResponse.StatusCode'?1"2"2N {
+			// Non 2xx HTTP response ...
+			Set tSC=$$$ERROR($$$EnsErrHTTPStatus,tHttpResponse.StatusCode,tHttpResponse.StatusLine)
+			Quit
+		}
+		set pResponse = ##class(EnsLib.ZenCloudMessaging.NotificationResponse).%New()
+		
+		Set pResponse.DeliveredAtUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="RefreshAccessToken">
+<Implementation><![CDATA[
+	/*
+	var tokenUrl = 'https://accounts.google.com/o/oauth2/token';
+  tokenRequest.open('POST', tokenUrl, true);
+  tokenRequest.setRequestHeader('Content-Type',
+                                'application/x-www-form-urlencoded');
+  var tokenData = 'client_secret=' + clientSecret + '&' +
+                  'grant_type=refresh_token&' +
+                  'refresh_token=' + refreshToken + '&' +
+                  'client_id=' + clientId;
+  */
+  set req=##class(%Net.HttpRequest).%New()
+  set req.Server="accounts.google.com"
+  set req.SSLConfiguration=..SSLConfig
+  set req.Https=1
+  set req.Port=443
+  do req.SetHeader("Content-Type","application/x-www-form-urlencoded")
+  do req.SetHeader("Accept","*/*")
+  do req.SetHeader("User-Agent","curl/7.30.0")
+  do req.RemoveHeader("Accept-Encoding")
+ 	do req.InsertFormData("client_secret",..ClientSecret)
+ 	do req.InsertFormData("client_id",..ClientId)
+ 	do req.InsertFormData("refresh_token",..RefreshToken)
+ 	do req.InsertFormData("grant_type","refresh_token")
+  set req.SSLCheckServerIdentity=0
+  do req.Post("/o/oauth2/token",2)
+ 
+  set rdata=""
+  do req.HttpResponse.Data.Rewind()
+  while ( 'req.HttpResponse.Data.AtEnd ) {
+	  set rdata=rdata_req.HttpResponse.Data.Read()
+  }
+  WRITE rdata
+  //$$$TRACE("rdata="_rdata)
+  set sc=##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(rdata,,.response)
+	set ..AccessToken=response."access_token"
+	$$$TRACE("..AccessToken="_..AccessToken)
+]]></Implementation>
+</Method>
+
+<XData name="MessageMap">
+<Data><![CDATA[
+<MapItems>
+	<MapItem MessageType="EnsLib.ZenCloudMessaging.NotificationRequest"> 
+		<Method>PushNotification</Method>
+	</MapItem>
+</MapItems>
+]]></Data>
+</XData>
+
+<Method name="ConstructGCMCHROMEHTTPPayload">
+<Description>
+Construct a payload request for GCM (over HTTP)</Description>
+<ClassMethod>1</ClassMethod>
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pPayload:%String]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tPayloadData
+		#dim tIndex As %Integer
+		
+		If (pRequest.SoundNotification="")
+			&& (pRequest.AlertNotification="")
+			&& (pRequest.BadgeNotification="")
+			&& (pRequest.Data.Count() = 0) {
+				
+			// Must have at least one of these properties set ...
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrInvalidNotification)
+			Quit
+		}
+		
+		Set tPayloadData("channelId") = ""
+		set tPayloadData("channelId")=pRequest.Identifiers.GetAt(1)
+		set tPayloadData("subchannelId")="0"
+		set tPayloadData("payload")=pRequest.AlertNotification
+		
+		//Set:pRequest.SoundNotification'="" tPayloadData("data", "sound") = pRequest.SoundNotification
+		//Set:pRequest.AlertNotification'="" tPayloadData("data", "alert") = pRequest.AlertNotification
+		//Set:pRequest.BadgeNotification'="" tPayloadData("data", "badge") = pRequest.BadgeNotification
+		//Set:pRequest.UrlNotification'="" tPayloadData("data", "url") = pRequest.UrlNotification
+		
+		/*		
+		#dim tKey As %String = ""
+		#dim tValue As %String
+		For {
+			Set tValue = pRequest.Data.GetNext(.tKey)
+			Quit:tKey=""
+			
+			Set tPayloadData("data","data",tKey) = tValue
+		}
+		*/
+		//Set:pRequest.CollapseKey'="" tPayloadData("collapse_key") = pRequest.CollapseKey		
+		//Set:pRequest.ExpiresUTC'="" tPayloadData("time_to_live") = ##class(EnsLib.ZenCloudMessaging.Util).TimeStampDelta(pRequest.ExpiresUTC,,1)\1
+		
+		// Convert the array to JSON
+		Set pPayload = ##class(EnsLib.ZenCloudMessaging.Util).ConvertArrayToJSON(.tPayloadData)
+		$$$TRACE("pPayload="_pPayload)
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="ParseGCMHTTPSuccessResponse">
+<Internal>1</Internal>
+<FormalSpec>pGCMResponse:%ZEN.proxyObject,pResponse:EnsLib.ZenCloudMessaging.NotificationResponse</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tIndex As %Integer
+		
+		// Remember when we actually delivered it
+		Set pResponse.DeliveredAtUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)
+
+		// Grab the multicast id
+		Set pResponse.MulticastId = pGCMResponse."multicast_id"
+		
+		// And the underlying message ids
+		For tIndex = 1:1:pGCMResponse.results.Count() {
+			#dim tResult As %ZEN.proxyObject = pGCMResponse.results.GetAt(tIndex)
+			#dim tMsgId As %String = tResult."message_id"
+			
+			// Add this message id
+			Do pResponse.MessageIds.Insert(tMsgId)
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="ParseGCMHTTPFailureResponse">
+<Description>
+Parse the JSON response from the GCM HTTP server</Description>
+<Internal>1</Internal>
+<FormalSpec>pGCMResponse:%ZEN.proxyObject</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		#dim tIndex As %Integer
+		
+		For tIndex = 1:1:pGCMResponse.results.Count() {
+			#dim tResult As %ZEN.proxyObject = pGCMResponse.results.GetAt(tIndex)
+			#dim tReason As %String = tResult."error"
+			#dim tSC2 As %Status
+			
+			// Construct a status for this error
+			Set tSC2 = $$$ERROR($$$EnsZenCloudMessagingErrGCMPushNotificationFailedWithReason,tReason)
+			Set tSC = $$$ADDSC(tSC,tSC2)
+		}
+		
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="OnInit">
+<Description>
+This user callback method is called via initConfig() from %OnNew() or in the case of SOAP Services from OnPreSOAP()</Description>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	#dim tSC As %Status
+	Set tSC=$$$OK,$ZT="Trap"
+	Do {
+		// TODO: Implement XMPP support
+		If ..NotificationProtocol = "xmpp" {
+			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrNotificationProtocolNotSupported,..NotificationProtocol)
+			Quit
+		}
+		
+		Set ..HttpRequest = ##class(%Net.HttpRequest).%New()
+			
+		Set ..HttpRequest.SSLConfiguration=..SSLConfig
+		Set ..HttpRequest.Server = $P(..PushServer,"/",3)
+		Set ..HttpRequest.Port = 443
+		Set ..HttpRequest.Https=1
+		Set ..HttpRequest.Timeout=$S(..Timeout=-1:2123456789,1:..Timeout)
+		
+		set ..RefreshAccessTimestamp = $ZTS	
+	} While (0)
+Exit
+	Quit tSC
+Trap
+	Set $ZT="",tSC=$$$EnsSystemError
+	Goto Exit
+]]></Implementation>
+</Method>
+
+<Method name="OnTearDown">
+<Description>
+This user callback method is called from %OnClose()</Description>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	Set ..HttpRequest = $$$NULLOREF
+	
+	Quit $$$OK
+]]></Implementation>
+</Method>
+</Class>
+
+
 <Class name="EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking">
 <Description>
 Zen Mobile Cloud Messaging Device Tracking</Description>
 <ClassType>persistent</ClassType>
 <IncludeCode>EnsZenCloudMessaging</IncludeCode>
 <Super>%Persistent,%XML.Adaptor</Super>
-<TimeChanged>63238,49594.167708</TimeChanged>
+<TimeChanged>63244,39643.079936</TimeChanged>
 <TimeCreated>62999,34371.399924</TimeCreated>
 
 <Property name="Service">
 <Description>
-Service type descriptor</Description>
+Service type descriptor
+Property Service As %String(DISPLAYLIST = ",Apple Push Notification Service,Google Cloud Messaging", VALUELIST = ",APNS,GCM") [ Required ];</Description>
 <Type>%String</Type>
 <Required>1</Required>
-<Parameter name="DISPLAYLIST" value=",Apple Push Notification Service,Google Cloud Messaging"/>
-<Parameter name="VALUELIST" value=",APNS,GCM"/>
+<Parameter name="DISPLAYLIST" value=",Apple Push Notification Service,Google Cloud Messaging,Google Chrome Cloud Messaging"/>
+<Parameter name="VALUELIST" value=",APNS,GCM,GCMCHROME"/>
 </Property>
 
 <Property name="Identifier">
@@ -1306,6 +1692,116 @@ Count of notifications sent</Description>
 </Value>
 </Data>
 </Storage>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.NotificationRouterOperation">
+<Description>
+Route notification along to the correct SERVICE type provider.
+This should be sent messages from the EnsLib.ZenCloudMessaging.IdentityManager.Process
+</Description>
+<IncludeCode>EnsZenCloudMessaging</IncludeCode>
+<Super>Ens.BusinessOperation</Super>
+<TimeChanged>63244,51066.099322</TimeChanged>
+<TimeCreated>63244,48602.929845</TimeCreated>
+
+<Parameter name="INVOCATION">
+<Default>Queue</Default>
+</Parameter>
+
+<Property name="AppleOperation">
+<Description>
+Operation which implements APNS (Apple iOS) notifications</Description>
+<Type>Ens.DataType.ConfigName</Type>
+<InitialExpression>"EnsLib.ZenCloudMessaging.APNS.Operation"</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Property name="AndroidOperation">
+<Description>
+Operation which implements GCM (Google Cloud Messaging) for Android devices</Description>
+<Type>Ens.DataType.ConfigName</Type>
+<InitialExpression>"EnsLib.ZenCloudMessaging.GCM.Operation"</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Property name="ChromeOperation">
+<Description>
+Operation which implements Google Cloud Messaging for Chrome</Description>
+<Type>Ens.DataType.ConfigName</Type>
+<InitialExpression>"EnsLib.ZenCloudMessaging.GCMChrome.Operation"</InitialExpression>
+<Required>1</Required>
+</Property>
+
+<Parameter name="SETTINGS">
+<Default>AppleOperation,AndroidOperation,ChromeOperation</Default>
+</Parameter>
+
+<Parameter name="SERVICES">
+<Default>APNS,GCM,GCMCHROME</Default>
+</Parameter>
+
+<Method name="PushNotification">
+<FormalSpec><![CDATA[pRequest:EnsLib.ZenCloudMessaging.NotificationRequest,&pResponse:EnsLib.ZenCloudMessaging.NotificationResponse]]></FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	set target=$case(pRequest.Service,
+		"APNS":..AppleOperation,
+		"GCM":..AndroidOperation,
+		"GCMCHROME":..ChromeOperation,
+		1:$$$ERROR($$$EnsZenCloudMessagingErrNotificationProtocolNotSupported,pRequest.Service)
+	)
+	$$$TRACE(target)
+	set sc=..SendRequestSync(target,pRequest,.pResponse)
+	$$$TRACE(sc)
+	quit sc
+]]></Implementation>
+</Method>
+
+<XData name="MessageMap">
+<Data><![CDATA[
+<MapItems>
+	<MapItem MessageType="EnsLib.ZenCloudMessaging.NotificationRequest"> 
+		<Method>PushNotification</Method>
+	</MapItem>
+</MapItems>
+]]></Data>
+</XData>
+</Class>
+
+
+<Class name="EnsLib.ZenCloudMessaging.IdentityManager.NotificationRoutingRule">
+<Description>
+Route notifications to the correct service type operation</Description>
+<Super>Ens.Rule.Definition</Super>
+<TimeChanged>63244,49283.959841</TimeChanged>
+<TimeCreated>63244,49090.724862</TimeCreated>
+
+<Parameter name="RuleAssistClass">
+<Default>EnsLib.MsgRouter.RuleAssist</Default>
+</Parameter>
+
+<XData name="RuleDefinition">
+<XMLNamespace>http://www.intersystems.com/rule</XMLNamespace>
+<Data><![CDATA[
+<ruleDefinition alias="" context="EnsLib.MsgRouter.RoutingEngine" production="">
+<ruleSet name="" effectiveBegin="" effectiveEnd="">
+<rule name="" disabled="false">
+<constraint name="source" value="EnsLib.ZenCloudMessaging.IdentityManager.Process"></constraint>
+<constraint name="msgClass" value="EnsLib.ZenCloudMessaging.NotificationRequest"></constraint>
+<when condition="Source.Service=&quot;APNS&quot;">
+<send transform="" target="EnsLib.ZenCloudMessaging.APNS.Operation"></send>
+<return></return>
+</when>
+<when condition="Source.Service=&quot;GCMCHROME&quot;">
+<send transform="" target="EnsLib.ZenCloudMessaging.GCMChrome.Operation"></send>
+<return></return>
+</when>
+</rule>
+</ruleSet>
+</ruleDefinition>
+]]></Data>
+</XData>
 </Class>
 
 
@@ -1853,7 +2349,7 @@ Custom data notification(s)</Description>
 Notification send request class for Apple Push Notification Service</Description>
 <IncludeCode>EnsZenCloudMessaging</IncludeCode>
 <Super>Ens.Request,NotificationInfo</Super>
-<TimeChanged>63237,54039</TimeChanged>
+<TimeChanged>63244,31845.717096</TimeChanged>
 <TimeCreated>62999,32136.778795</TimeCreated>
 
 <Parameter name="RESPONSECLASSNAME">
@@ -1868,8 +2364,8 @@ Response class</Description>
 Service type descriptor</Description>
 <Type>%String</Type>
 <Required>1</Required>
-<Parameter name="DISPLAYLIST" value=",Apple Push Notification Service,Google Cloud Messaging"/>
-<Parameter name="VALUELIST" value=",APNS,GCM"/>
+<Parameter name="DISPLAYLIST" value=",Apple Push Notification Service,Google Cloud Messaging,Google Chrome Cloud Messaging"/>
+<Parameter name="VALUELIST" value=",APNS,GCM,GCMCHROME"/>
 </Property>
 
 <Property name="Identifiers">
@@ -1897,7 +2393,6 @@ App Identifier (not used by APNS)</Description>
 <Subscript>"EnsLib.ZenCloudMessaging.NotificationRequest.Data"</Subscript>
 </Data>
 <Data name="NotificationRequestDefaultData">
-<Structure>listnode</Structure>
 <Subscript>"NotificationRequest"</Subscript>
 <Value name="1">
 <Value>CollapseKey</Value>
@@ -2132,9 +2627,10 @@ Helper class to generate a UTC timestamp with optional offset</Description>
 </Class>
 
 
-<Routine name="LoadZENCloudMessaging" type="MAC" languagemode="0" timestamp="63239,55060.631499"><![CDATA[
+<Routine name="LoadZENCloudMessaging" type="MAC" languagemode="0" timestamp="63244,54100.18063"><![CDATA[
  ;
- 
+ quit
+LoadSourceMsgs 
  write "Loading ZenCloudMessaging source="_^source.dir,!
  
  //do ##class(%Library.MessageDictionary).Import(^source.dir_"localize/EnsZenCloudMessagingErrors.xml","d")
@@ -2149,6 +2645,22 @@ Helper class to generate a UTC timestamp with optional offset</Description>
  Do GenerateInclude^%occMsgXML("EnsZenCloudMessagingErrors",0,domain,1)
  do $system.OBJ.ImportDir(^source.dir,"*.xml","ckv",.errors,1,.imported)
  quit
+LoadGitRepo(sourceDir) 
+ write "Loading ZenCloudMessaging source="_sourceDir,!
+ 
+ //do ##class(%Library.MessageDictionary).Import(^source.dir_"localize/EnsZenCloudMessagingErrors.xml","d")
+ //do Import^%occMessages(^source.dir_"localize/EnsZenCloudMessagingErrors.xml","","EnsZenCloudMessaging")
+ set domain="EnsZenCloudMessaging"
+ set file=sourceDir_"EnsZenCloudMessagingErrors.xml"
+ Set tSC=$$Import^%occMsgXML(file,domain,1) //$$$CheckStatus(tSC)
+ //do ##class(%Library.MessageDictionary).ImportDir(^source.dir_"localize/","d")
+ //zw ^CacheMsg("EnsZenCloudMessaging")
+ //zw ^CacheMsgNames
+ //do ##class(%Library.MessageDictionary).GenerateInclude("EnsZenCloudMessagingErrors","s","EnsZenCloudMessaging",1)
+ Do GenerateInclude^%occMsgXML("EnsZenCloudMessagingErrors",0,domain,1)
+ do $system.OBJ.ImportDir(sourceDir,"*.prj.xml","ckv",.errors,1,.imported)
+ quit
+ 
 Test
 	Write "Testing ----",!
 	set deviceToken="04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553"
@@ -2166,19 +2678,50 @@ TestAlert
 	do ##class(Ens.Director).RestartProduction()
 	set alert=##class(Ens.AlertRequest).%New()
 	set alert.AlertDestination = "App1" 	// AppToken here
-	set alert.AlertText = "Alert from Ensemble! Check yourself!"
+	set alert.AlertText = "Alert from Ensemble!"_$ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)
 	set alert.SourceConfigName = "FooSource"
 	zw alert
 	//set target="Test.ZenCloudMessaging.MasterNodeOperation"
 	set target="Ens.Alert"
   set sc=##class(EnsLib.Testing.Service).SendTestRequest(target,alert,.response,.seesionIs,1)
   do $system.Status.DisplayError(sc)
-  zw response
+  //zw response
   quit
+TestChromeTokenRefresh
+	set gcm=##class(EnsLib.ZenCloudMessaging.GCMChrome.Operation).%New("Foo")
+	set gcm.SSLConfig="ZMAPNS"
+	set gcm.ClientId="276725222628-9d4sddsib7mg67dp9nn0mua9omji2rg5.apps.googleusercontent.com"
+	set gcm.ClientSecret="QUt79FuJxyshHg5uOQ6ZDV4P"
+  set gcm.RefreshToken="1/1VoCXcKI1lIwzZiz9RVECklEEFZeRCU1XcmSjoBMnwQ"
+  do gcm.RefreshAccessToken()
+	quit 
+TestChrome
+	do ##class(Ens.Director).RestartProduction()
+	set note=##class(EnsLib.ZenCloudMessaging.NotificationRequest).%New()
+	write "Please enter your message :)",!
+	read message
+	//set note.AlertNotification="Howdy from Ensemble "_$zdt($zts)
+	set note.AlertNotification=message
+	/// channelId here
+	set channelId="08373513422183901650/cillljigdbknpbfhkdbnpopcogccjeec"
+	do note.Identifiers.Insert(channelId)
+	set note.Service="GCMCHROME"
+	set target="EnsLib.ZenCloudMessaging.GCMChrome.Operation"
+	set sc=##class(EnsLib.Testing.Service).SendTestRequest(target,note,.response,.seesionId,0)
+  do $system.Status.DisplayError(sc)
+  zw response
+  
+	quit
+ExportProject
+	set sourceDir="/Users/jmimick/work/gs2014/"
+	set prj=##class(%Studio.Project).%OpenId("MyZenCloudMessaging")
+	set ok=prj.Export(sourceDir_"MyZenCloudMessaging.prj.xml",,,,,1)
+	if 'ok do $system.Status.DisplayError(ok)
+	
 ]]></Routine>
 
 
-<Project name="MyZenCloudMessaging" LastModified="2014-02-21 15:40:28.813865">
+<Project name="MyZenCloudMessaging" LastModified="2014-02-26 14:51:19.979093">
   <Items>
     <ProjectItem name="EnsLib.ZenCloudMessaging" type="PKG"></ProjectItem>
     <ProjectItem name="LoadZENCloudMessaging.MAC" type="MAC"></ProjectItem>
@@ -2194,7 +2737,7 @@ TestAlert
 A test HTTP based production for ebXML</Description>
 <ProcedureBlock>1</ProcedureBlock>
 <Super>Ens.Production</Super>
-<TimeChanged>63239,56215.800984</TimeChanged>
+<TimeChanged>63244,51191.349423</TimeChanged>
 <TimeCreated>61185,56891.228831</TimeCreated>
 
 <XData name="ProductionDefinition">
@@ -2232,9 +2775,21 @@ A test HTTP based production for ebXML</Description>
     <Setting Target="Host" Name="AlertOnError">1</Setting>
   </Item>
   <Item Name="EnsLib.ZenCloudMessaging.IdentityManager.Process" Category="" ClassName="EnsLib.ZenCloudMessaging.IdentityManager.Process" PoolSize="0" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
-    <Setting Target="Host" Name="NotificationServiceTarget">EnsLib.ZenCloudMessaging.APNS.Operation</Setting>
+    <Setting Target="Host" Name="NotificationServiceTarget">EnsLib.ZenCloudMessaging.IdentityManager.NotificationRouterOperation</Setting>
     <Setting Target="Host" Name="AlertOnError">1</Setting>
     <Setting Target="Host" Name="AlertGroups">App1</Setting>
+  </Item>
+  <Item Name="EnsLib.ZenCloudMessaging.GCMChrome.Operation" Category="" ClassName="EnsLib.ZenCloudMessaging.GCMChrome.Operation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Host" Name="ClientId">586278452950-lh9mmpemlbibavaob7vitsiuuhf0si7d.apps.googleusercontent.com</Setting>
+    <Setting Target="Host" Name="ClientSecret">wOWmnyOMbahIQM3UaMSmIS3y</Setting>
+    <Setting Target="Host" Name="NotificationProtocol">http</Setting>
+    <Setting Target="Host" Name="SSLConfig">ZMAPNS</Setting>
+    <Setting Target="Host" Name="ArchiveIO">1</Setting>
+    <Setting Target="Host" Name="RefreshToken">1/-XmHwJZJHZmyqVFKNePHhjlwlSYo77VV7rn7ht7RM6w</Setting>
+  </Item>
+  <Item Name="EnsLib.ZenCloudMessaging.IdentityManager.NotificationRouterOperation" Category="" ClassName="EnsLib.ZenCloudMessaging.IdentityManager.NotificationRouterOperation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
+    <Setting Target="Host" Name="AppleOperation">EnsLib.ZenCloudMessaging.APNS.Operation</Setting>
+    <Setting Target="Host" Name="ChromeOperation">EnsLib.ZenCloudMessaging.GCMChrome.Operation</Setting>
   </Item>
 </Production>
 ]]></Data>
@@ -2542,7 +3097,7 @@ REST service which allows a device to:
 2. UN-register itself
 3. specify certain kinds of "events" to get notifications for</Description>
 <Super>EnsLib.HTTP.Service</Super>
-<TimeChanged>63239,49636.318126</TimeChanged>
+<TimeChanged>63243,57607.116328</TimeChanged>
 <TimeCreated>63238,43375.844326</TimeCreated>
 
 <UDLText name="T">

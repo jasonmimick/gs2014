@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MsgFile Language="en">
+	<MsgDomain Domain="EnsZenCloudMessaging">
+		<Message Id="ErrGeneral">%1</Message>
+		<Message Id="ErrIncompatibleNotificationType">A '%1' notification cannot be processed by a '%2' business component</Message>
+		<Message Id="ErrInvalidNotification">The notification is invalid</Message>
+		<Message Id="ErrNotificationProtocolNotSupported">The notification protocol '%1' is not supported</Message>
+		<Message Id="ErrInvalidDeviceToken">The device token is invalid</Message>
+		<Message Id="ErrInvalidDeviceIdAppIdAppTokenAssociation">The DeviceId/AppId was not associated with the AppToken</Message>
+		<Message Id="ErrAPNSPushNotificationFailed">The push notification attempt failed</Message>
+		<Message Id="ErrAPNSPushNotificationFailedWithReason">The push notification attempt failed: %1</Message>
+		<Message Id="ErrAPNSInvalidResponse">Invalid response from the APNS: %1</Message>
+		<Message Id="ErrAPNSConnectionFailed">Connection to %1:%2 failed</Message>
+		<Message Id="ErrAPNSConnectionTerminated">The APNS terminated the connection</Message>
+		<Message Id="ErrGCMConnectionFailed">Connection to %1 failed</Message>
+		<Message Id="ErrGCMPushNotificationFailed">The push notification attempt failed</Message>
+		<Message Id="ErrGCMPushNotificationFailedWithReason">The push notification attempt failed: %1</Message>
+	</MsgDomain>
+</MsgFile>

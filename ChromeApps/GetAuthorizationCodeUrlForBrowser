@@ -1,0 +1,5 @@
+https://accounts.google.com/o/oauth2/auth?
+scope=email%20profile%20https://www.googleapis.com/auth/gcm_for_chrome&
+redirect_uri=urn:ietf:wg:oauth:2.0:oob&
+response_type=code&
+client_id=577750054847-q31iijr2ud8pb3agp5oss1u5bnj9gog0.apps.googleusercontent.com

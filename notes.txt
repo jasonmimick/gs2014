@@ -1,0 +1,66 @@
+
+create certs from apple apns
+http://quickblox.com/developers/How_to_create_APNS_certificates
+
+generate .pem from .p12
+http://blog.max.berger.name/2010/01/pem-fromto-p12.html
+
+test ssl handshake (search for openssl)
+https://developer.apple.com/library/ios/technotes/tn2265/_index.html
+
+crank up debugging in Caché to test ssl
+http://wrcissues:8024/problems/814xxx/814313.htm
+rr:  Spoke with Michael.  They were setting up a pair of SSL clients going to one SSL server.  They 
+had one set up properly and working.  the second one was giving them trouble.  It was getting an 
+Error #988: SSL Handshake Failed message when they tested it from SMP.  Had him look at SYSLOG, 
+Audit, and Cconsole.log messages.  Nothing logged.  used:
+
+%SYS>D ^REDEBUG
+
+to set the flags to FFFFFFFF
+
+retested and then set the flags back to FF.
+
+Checked out the cconsole.log file.  There was a message PEM_do_header: Bad Password Read.
+
+Had them reset the password.  Worked.  All set on this issue.
+
+
+Create mobile provisioning profile.
+Download and use iTunes to install on device, drag to "Library" in iTunes and sync
+
+tutorial to build iOS app
+http://www.raywenderlich.com/32960/apple-push-notification-services-in-ios-6-tutorial-part-1
+http://www.raywenderlich.com/32963/apple-push-notification-services-in-ios-6-tutorial-part-2
+
+
+------
+iOS app notes
+-----
+
+
+
+----
+GCM
+----
+
+Tokens, urls, etc.
+1. Create app on Google dev console
+1.5 Create a client id
+2. Need to get authorization token. Paste this into browser:
+
+https://accounts.google.com/o/oauth2/auth?
+scope=email%20profile%20https://www.googleapis.com/auth/gcm_for_chrome&
+redirect_uri=urn:ietf:wg:oauth:2.0:oob&
+response_type=code&
+client_id=577750054847-q31iijr2ud8pb3agp5oss1u5bnj9gog0.apps.googleusercontent.com
+
+3. From here you'll get the auth code - use in this curl to get access_token:
+
+curl -v https://accounts.google.com/o/oauth2/token -d \
+        "client_secret=HJmTlbPIKrtX9l2Rya7pc_Xd&grant_type=authorization_code&code=4/vMBkqc1jCil5laOmCtVircv0bY1o.AhCEs1eO8_0ZaDn_6y0ZQNjCRxHLiAI&client_id=577750054847-q31iijr2ud8pb3agp5oss1u5bnj9gog0.apps.googleusercontent.com&redirect_uri=urn:ietf:wg:oauth:2.0:oob"
+
+where you put the code you got in step 2.
+
+4. send message-
+
