@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-02-26 15:01:44">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-02-28 16:07:29">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -2627,6 +2627,51 @@ Helper class to generate a UTC timestamp with optional offset</Description>
 </Class>
 
 
+<Routine name="EnsZenCloudMessaging" type="INC" timestamp="63237,54039"><![CDATA[
+#;
+#; Zen Mobile Cloud Messaging
+#;
+#include EnsZenCloudMessagingErrors
+#;
+]]></Routine>
+
+
+<Routine name="EnsZenCloudMessagingEnsZenCloudMessagingErrors" type="INC" timestamp="63237,58377"><![CDATA[
+#define EnsZenCloudMessagingErrAPNSConnectionFailed                    "<EnsZenCloudMessaging>ErrAPNSConnectionFailed"
+#define EnsZenCloudMessagingErrAPNSConnectionTerminated                "<EnsZenCloudMessaging>ErrAPNSConnectionTerminated"
+#define EnsZenCloudMessagingErrAPNSInvalidResponse                     "<EnsZenCloudMessaging>ErrAPNSInvalidResponse"
+#define EnsZenCloudMessagingErrAPNSPushNotificationFailed              "<EnsZenCloudMessaging>ErrAPNSPushNotificationFailed"
+#define EnsZenCloudMessagingErrAPNSPushNotificationFailedWithReason    "<EnsZenCloudMessaging>ErrAPNSPushNotificationFailedWithReason"
+#define EnsZenCloudMessagingErrGCMConnectionFailed                     "<EnsZenCloudMessaging>ErrGCMConnectionFailed"
+#define EnsZenCloudMessagingErrGCMPushNotificationFailed               "<EnsZenCloudMessaging>ErrGCMPushNotificationFailed"
+#define EnsZenCloudMessagingErrGCMPushNotificationFailedWithReason     "<EnsZenCloudMessaging>ErrGCMPushNotificationFailedWithReason"
+#define EnsZenCloudMessagingErrGeneral                                 "<EnsZenCloudMessaging>ErrGeneral"
+#define EnsZenCloudMessagingErrIncompatibleNotificationType            "<EnsZenCloudMessaging>ErrIncompatibleNotificationType"
+#define EnsZenCloudMessagingErrInvalidDeviceIdAppIdAppTokenAssociation "<EnsZenCloudMessaging>ErrInvalidDeviceIdAppIdAppTokenAssociation"
+#define EnsZenCloudMessagingErrInvalidDeviceToken                      "<EnsZenCloudMessaging>ErrInvalidDeviceToken"
+#define EnsZenCloudMessagingErrInvalidNotification                     "<EnsZenCloudMessaging>ErrInvalidNotification"
+#define EnsZenCloudMessagingErrNotificationProtocolNotSupported        "<EnsZenCloudMessaging>ErrNotificationProtocolNotSupported"
+]]></Routine>
+
+
+<Routine name="EnsZenCloudMessagingErrors" type="INC" timestamp="63237,58593"><![CDATA[
+#define EnsZenCloudMessagingErrAPNSConnectionFailed                    "<EnsZenCloudMessaging>ErrAPNSConnectionFailed"
+#define EnsZenCloudMessagingErrAPNSConnectionTerminated                "<EnsZenCloudMessaging>ErrAPNSConnectionTerminated"
+#define EnsZenCloudMessagingErrAPNSInvalidResponse                     "<EnsZenCloudMessaging>ErrAPNSInvalidResponse"
+#define EnsZenCloudMessagingErrAPNSPushNotificationFailed              "<EnsZenCloudMessaging>ErrAPNSPushNotificationFailed"
+#define EnsZenCloudMessagingErrAPNSPushNotificationFailedWithReason    "<EnsZenCloudMessaging>ErrAPNSPushNotificationFailedWithReason"
+#define EnsZenCloudMessagingErrGCMConnectionFailed                     "<EnsZenCloudMessaging>ErrGCMConnectionFailed"
+#define EnsZenCloudMessagingErrGCMPushNotificationFailed               "<EnsZenCloudMessaging>ErrGCMPushNotificationFailed"
+#define EnsZenCloudMessagingErrGCMPushNotificationFailedWithReason     "<EnsZenCloudMessaging>ErrGCMPushNotificationFailedWithReason"
+#define EnsZenCloudMessagingErrGeneral                                 "<EnsZenCloudMessaging>ErrGeneral"
+#define EnsZenCloudMessagingErrIncompatibleNotificationType            "<EnsZenCloudMessaging>ErrIncompatibleNotificationType"
+#define EnsZenCloudMessagingErrInvalidDeviceIdAppIdAppTokenAssociation "<EnsZenCloudMessaging>ErrInvalidDeviceIdAppIdAppTokenAssociation"
+#define EnsZenCloudMessagingErrInvalidDeviceToken                      "<EnsZenCloudMessaging>ErrInvalidDeviceToken"
+#define EnsZenCloudMessagingErrInvalidNotification                     "<EnsZenCloudMessaging>ErrInvalidNotification"
+#define EnsZenCloudMessagingErrNotificationProtocolNotSupported        "<EnsZenCloudMessaging>ErrNotificationProtocolNotSupported"
+]]></Routine>
+
+
 <Routine name="LoadZENCloudMessaging" type="MAC" languagemode="0" timestamp="63244,54100.18063"><![CDATA[
  ;
  quit
@@ -2721,11 +2766,14 @@ ExportProject
 ]]></Routine>
 
 
-<Project name="MyZenCloudMessaging" LastModified="2014-02-26 14:51:19.979093">
+<Project name="MyZenCloudMessaging" LastModified="2014-02-28 16:04:22.380638">
   <Items>
     <ProjectItem name="EnsLib.ZenCloudMessaging" type="PKG"></ProjectItem>
     <ProjectItem name="LoadZENCloudMessaging.MAC" type="MAC"></ProjectItem>
     <ProjectItem name="Test" type="PKG"></ProjectItem>
+    <ProjectItem name="EnsZenCloudMessaging.INC" type="MAC"></ProjectItem>
+    <ProjectItem name="EnsZenCloudMessagingEnsZenCloudMessagingErrors.INC" type="MAC"></ProjectItem>
+    <ProjectItem name="EnsZenCloudMessagingErrors.INC" type="MAC"></ProjectItem>
   </Items>
 </Project>
 
