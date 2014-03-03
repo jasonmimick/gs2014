@@ -58,8 +58,8 @@
     // Start request
     //NSString *code = textField.text;
     //NSURL *url = [NSURL URLWithString:@"http://192.168.1.135:57774/"];
-    NSString *addr = @"http://192.168.1.135:9980/";
-    
+    //NSString *addr = @"http://192.168.1.135:9980/";
+    NSString *addr = @"http://ec2-54-80-110-189.compute-1.amazonaws.com:9980/";
     const unsigned *tokenBytes = [device_id bytes];
     NSString *hexToken = [NSString stringWithFormat:@"%08x%08x%08x%08x%08x%08x%08x%08x",
                           ntohl(tokenBytes[0]), ntohl(tokenBytes[1]), ntohl(tokenBytes[2]),
@@ -139,7 +139,9 @@
     
     //NSString *addr = @"http://192.168.1.135:9980/";
    // NSURL *regUrl = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@",addr,hexToken]];
-    NSURL *regUrl = [NSURL URLWithString:@"http://192.168.1.135:9980/register+notify"];
+    NSString *host = @"http://ec2-54-80-110-189.compute-1.amazonaws.com:9980/register+notify";
+    // "http://192.168.1.135:9980/register+notify"
+    NSURL *regUrl = [NSURL URLWithString:host];
     
     NSLog(@"regUrl=%@", regUrl);
     
@@ -147,10 +149,10 @@
     [request appendPostData:[payload dataUsingEncoding:NSUTF8StringEncoding]];
     [request setRequestMethod:@"POST"];
     
-    //[request startSynchronous];
+    [request startSynchronous];
     //[request setDelegate:self.registerRequestFinished];
     
-    [request startAsynchronous];
+    //[request startAsynchronous];
     
     NSError *err = [request error];
     if ( !err ) {
