@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 15:36:03">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 15:43:52">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -3612,7 +3612,7 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,56139.324547"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,56608.243087"><![CDATA[
 #Include %occInclude
 	;
 SystemReady(PublicDnsName)	public	{
@@ -3628,7 +3628,7 @@ SystemReady(PublicDnsName)	public	{
 	
 	set Identifier="08373513422183901650/cillljigdbknpbfhkdbnpopcogccjeec"
 	set AppIdentifier="HelloGCM"
-	set Service="APNS"
+	set Service="GCMCHROME"
 	$$$THROWONERROR(sc,##class(EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking).FindDeviceByDeviceAndAppIds(Identifier,AppIdentifier,Service,.chromeDevice,1))
 	do chromeDevice.AssociatedAppTokens.Insert("AmazonCloudFormationAlerts")
 	$$$THROWONERROR(sc,chromeDevice.%Save())
