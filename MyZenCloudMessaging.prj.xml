@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 15:06:46">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 15:26:52">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -3612,9 +3612,37 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,51458.135632"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,55576.772678"><![CDATA[
 #Include %occInclude
 	;
+SystemReady(PublicDnsName)	public	{
+	// register iPhone and Chrome App to subscribe
+	set appleDevice=##class(EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking).%New()
+	set appleDevice.Identifier="04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553"
+	set appleDevice.AppIdentifier="ZCMiOS"
+	do appleDevice.AssociatedAppTokens.Insert("Amazon CloudFormation Alerts")
+	set appleDevice.Service="APNS"
+	$$$THROWONERROR(sc,appleDevice.%Save())
+	
+	set chromeDevice=##class(EnsLib.ZenCloudMessaging.IdentityManager.DeviceTracking).%New()
+	set chromeDevice.Identifier="08373513422183901650/cillljigdbknpbfhkdbnpopcogccjeec"
+	set chromeDevice.AppIdentifier="HelloGCM"
+	do chromeDevice.AssociatedAppTokens.Insert("AmazonCloudFormationAlerts")
+	set chromeDevice.Service="APNS"
+	$$$THROWONERROR(sc,chromeDevice.%Save())
+	
+	// send system ready message	
+	$$$THROWONERROR(sc,##class(Ens.Director).CreateBusinessService("EnsLib.ZenCloudMessaging.AppService",.service))
+	set service.Timeout = -1
+	
+	set request=##class(EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest).%New()
+	set request.AssociatedAppToken="AmazonCloudFormationAlerts"
+	set request.AlertNotification="Your cloud system is ready @ "_PublicDnsName
+	set request.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
+	$$$THROWONERROR(sc,service.ProcessInput(request,.response,""))
+
+  
+}
 Demo(AppToken="App1",NumberMessages=10)		public {
 	; Send a few messages to "App1"
 	$$$THROWONERROR(sc,##class(Ens.Director).CreateBusinessService("EnsLib.ZenCloudMessaging.AppService",.service))
