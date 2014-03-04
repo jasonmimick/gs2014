@@ -90,7 +90,7 @@ function channelIdCallback(message) {
   // Call the device endpoint on the master
   // messaging server to register this ChromeApp instance
   var ensRequest = new XMLHttpRequest();
-  var ensUrl="http://localhost:9980/register";
+  var ensUrl="http://ec2-54-80-110-189.compute-1.amazonaws.com:9980/register";
   ensRequest.open('POST',ensUrl,true);
   var regInfo={ "Service" : "GCMCHROME",
 			  "Identifier" : message.channelId,
