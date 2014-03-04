@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 14:56:30">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 15:04:44">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -945,7 +945,7 @@ This user callback method is called from %OnClose()</Description>
 Interfaces with the Google Cloud Messaging Service</Description>
 <IncludeCode>EnsZenCloudMessaging</IncludeCode>
 <Super>Ens.BusinessOperation</Super>
-<TimeChanged>63250,53764.780879</TimeChanged>
+<TimeChanged>63250,54245.25331</TimeChanged>
 <TimeCreated>63243,57688.148914</TimeCreated>
 
 <Property name="NotificationProtocol">
@@ -1076,12 +1076,17 @@ The access_token which we get some the refresh_token</Description>
 		//Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*),1)
 		Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*))
 		$$$TRACE("Error codes back from POST to google: "_$system.Status.GetErrorCodes(tSC))
-		//	if ( $system.Status.GetErrorCodes(tSC) '[ "5922" ) 
+		if ( $system.Status.GetErrorCodes(tSC) [ "5922" ) {
+			$$$LOGWARNING("Timed out waiting for response from Google (painfully, this does not neccessarily mean failure):"_$system.Status.GetErrorText(tSC))
+			set tSC=$$$OK	
+			set pResponse = ##class(EnsLib.ZenCloudMessaging.NotificationResponse).%New()
+			Set pResponse.DeliveredAtUTC = $ZDT($system.Util.LocalWithZTIMEZONEtoUTC($H),3)		
+			quit
+		} 
 		Quit:$$$ISERR(tSC)
-		
 		#dim tHttpResponse As %Net.HttpResponse = ..HttpRequest.HttpResponse
 		
-		If '$IsObject(tHttpResponse) {
+		If ('$IsObject(tHttpResponse)) {
 			Set tSC = $$$ERROR($$$EnsZenCloudMessagingErrGCMConnectionFailed,..PushServer)
 			Quit
 		}
