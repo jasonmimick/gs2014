@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 13:55:23">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 14:02:30">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -3607,17 +3607,17 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,39618.043452"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,50505.697061"><![CDATA[
 #Include %occInclude
 	;
 Demo(AppToken="App1",NumberMessages=10)		public {
 	; Send a few messages to "App1"
-	set request=##class(EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest).%New()
-	set request.AssociatedAppToken="App1"
 	$$$THROWONERROR(sc,##class(Ens.Director).CreateBusinessService("EnsLib.ZenCloudMessaging.AppService",.service))
 	set service.Timeout = -1
 	zw service
 	for i=1:1:NumberMessages {
+		set request=##class(EnsLib.ZenCloudMessaging.IdentityManager.NotificationByIdentityRequest).%New()
+		set request.AssociatedAppToken="App1"
 		set request.AlertNotification="Hello - Test message # "_i_" "_$H
 		set request.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
 
