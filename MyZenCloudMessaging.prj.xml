@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 10:52:57">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 10:57:25">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -3603,7 +3603,7 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,39004.872965"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,39438.376013"><![CDATA[
 #Include %occInclude
 	;
 Demo(AppToken="App1",NumberMessages=10)		public {
@@ -3615,6 +3615,8 @@ Demo(AppToken="App1",NumberMessages=10)		public {
 	zw service
 	for i=1:1:NumberMessages {
 		set request.AlertNotification="Hello - Test message # "_i_" "_$H
+		set request.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
+
 		$$$THROWONERROR(sc,service.ProcessInput(request,.response,""))
 		zw response
   }	
