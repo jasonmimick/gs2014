@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 10:57:25">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 13:27:18">
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -2787,7 +2787,7 @@ ExportProject(sourceDir="/Users/jmimick/work/gs2014/") Public {
 A test HTTP based production for ebXML</Description>
 <ProcedureBlock>1</ProcedureBlock>
 <Super>Ens.Production</Super>
-<TimeChanged>63249,54467.074909</TimeChanged>
+<TimeChanged>63250,39542.467172</TimeChanged>
 <TimeCreated>61185,56891.228831</TimeCreated>
 
 <XData name="ProductionDefinition">
@@ -2798,7 +2798,7 @@ A test HTTP based production for ebXML</Description>
   <Setting Target="Adapter" Name="AlertNotificationOperation"></Setting>
   <Item Name="EnsLib.ZenCloudMessaging.AppService" Category="" ClassName="EnsLib.ZenCloudMessaging.AppService" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
     <Setting Target="Host" Name="InactivityTimeout">0</Setting>
-    <Setting Target="Host" Name="Target">EnsLib.ZenCloudMessaging.APNS.Operation</Setting>
+    <Setting Target="Host" Name="Target">EnsLib.ZenCloudMessaging.IdentityManager.Process</Setting>
   </Item>
   <Item Name="EnsLib.ZenCloudMessaging.APNS.Operation" Category="" ClassName="EnsLib.ZenCloudMessaging.APNS.Operation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
     <Setting Target="Host" Name="InactivityTimeout">0</Setting>
@@ -3603,7 +3603,7 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,39438.376013"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,39618.043452"><![CDATA[
 #Include %occInclude
 	;
 Demo(AppToken="App1",NumberMessages=10)		public {
@@ -3617,8 +3617,12 @@ Demo(AppToken="App1",NumberMessages=10)		public {
 		set request.AlertNotification="Hello - Test message # "_i_" "_$H
 		set request.ExpiresUTC = ##class(EnsLib.ZenCloudMessaging.Util).UTCTimeStamp(24*60*60) // + 24hrs
 
-		$$$THROWONERROR(sc,service.ProcessInput(request,.response,""))
-		zw response
+		set sc=service.ProcessInput(request,.response,"")
+		if ( $$$ISERR(sc) ) {
+			do $system.Status.DisplayError(sc)
+		} else {
+			zw response
+		}
   }	
 }
 t1()	public {	
