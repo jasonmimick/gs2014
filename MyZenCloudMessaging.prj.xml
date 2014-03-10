@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-10 08:45:58">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-10 11:16:36">
 <Class name="Demo.AddressBookEntry">
 <Description>
 Sample address book entry</Description>
@@ -3020,6 +3020,7 @@ ExportProject(sourceDir="/Users/jmimick/work/gs2014/") Public {
 
 <Project name="MyZenCloudMessaging" LastModified="2014-03-07 15:45:48.805325">
   <Items>
+    <ProjectItem name="Demo.AddressBookEntry" type="CLS"></ProjectItem>
     <ProjectItem name="Demo.EnsLogService" type="CLS"></ProjectItem>
     <ProjectItem name="EnsLib.HTTP.SimpleHttpd.MAC" type="MAC"></ProjectItem>
     <ProjectItem name="EnsLib.HTTP.shttpd.MAC" type="MAC"></ProjectItem>
@@ -3031,7 +3032,6 @@ ExportProject(sourceDir="/Users/jmimick/work/gs2014/") Public {
     <ProjectItem name="Test" type="PKG"></ProjectItem>
     <ProjectItem name="ZenCloudMessageDemo.MAC" type="MAC"></ProjectItem>
     <ProjectItem name="shttpd.MAC" type="MAC"></ProjectItem>
-    <ProjectItem name="Demo.AddressBookEntry" type="CLS"></ProjectItem>
   </Items>
 </Project>
 
@@ -3043,7 +3043,7 @@ ExportProject(sourceDir="/Users/jmimick/work/gs2014/") Public {
 A test HTTP based production for ebXML</Description>
 <ProcedureBlock>1</ProcedureBlock>
 <Super>Ens.Production</Super>
-<TimeChanged>63252,39401.441379</TimeChanged>
+<TimeChanged>63256,35777.89559</TimeChanged>
 <TimeCreated>61185,56891.228831</TimeCreated>
 
 <XData name="ProductionDefinition">
@@ -3324,7 +3324,7 @@ Classmethod to test the Apple Push Notification Service business operation</Desc
 
 		Set tMsgOut.SoundNotification = 1
 		Set tMsgOut.UrlNotification = "http://www.cnn.com"
-		Do tMsgOut.Data.SetAt(device.AppIdentifier,"AppIdentifier")
+		Do tMsgOut.Data.SetAt(device.AppIdentifier,"App1")
 		Do tMsgOut.Data.SetAt(device.AppToken,"AppToken")
 
 		
@@ -3860,13 +3860,27 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63251,65581.914982"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63256,40525.265858"><![CDATA[
 #Include %occInclude
 	;
 SystemReady(PublicDnsName="Foo")	public	{
 	// attempt to fetch PublicDnsName from amazon
-	set url="http://169.254.169.254/latest/meta-data/public-hostname"
-	set PublicDnsName=""
+	//set url="http://169.254.169.254/latest/meta-data/public-hostname"
+	if ( PublicDnsName="Foo") {
+		try {
+			set ipreq=##class(%Net.HttpRequest).%New()
+			set ipreq.Server="169.254.169.254"
+			do ipreq.Get("/latest/meta-data/public-hostname")
+			set ip=""
+			while ( 'ipreq.HttpResponse.AtEnd ) {
+				set ip=ipreq.HttpResponse.Data.Read()		
+			}
+			set PublicDnsName=ip
+		} catch error {
+			write error.DisplayString()
+			set PublicDnsName="Error fetching PublicDns"
+		}
+	}
 	// register iPhone and Chrome App to subscribe
 	set Identifier="04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553"
 	set AppIdentifier="ZCMiOS"
