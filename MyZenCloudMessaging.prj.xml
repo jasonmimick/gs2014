@@ -1,5 +1,247 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-04 15:43:52">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-10 08:45:58">
+<Class name="Demo.AddressBookEntry">
+<Description>
+Sample address book entry</Description>
+<Super>%Persistent</Super>
+<TimeChanged>63253,56719.41881</TimeChanged>
+<TimeCreated>63253,54620.134353</TimeCreated>
+
+<Property name="LastName">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="200"/>
+</Property>
+
+<Property name="FirstName">
+<Type>%String</Type>
+<Parameter name="MAXLEN" value="200"/>
+</Property>
+
+<Property name="Phone">
+<Type>%String</Type>
+</Property>
+
+<Property name="Email">
+<Type>%String</Type>
+</Property>
+
+<Property name="Twitter">
+<Type>%String</Type>
+</Property>
+
+<Method name="Populate">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>number=100</FormalSpec>
+<ReturnType>%String</ReturnType>
+<Implementation><![CDATA[
+	k ^Demo.AddressBookEntry
+	for i=1:1:number {
+		set addr=..%New()
+		set addr.LastName = ##class(%PopulateUtils).LastName()
+		set addr.FirstName= ##class(%PopulateUtils).FirstName()
+		set addr.Phone= ##class(%PopulateUtils).USPhone()
+		set com=$zstrip(##class(%PopulateUtils).Company(),"*WP")
+		set addr.Email=$zconvert($extract(addr.FirstName,1)_addr.LastName,"l")_"@"_com_".com"
+  	set addr.Twitter="@"_addr.FirstName_$random(10000)
+		$$$THROWONERROR(sc,addr.%Save())
+	}
+]]></Implementation>
+</Method>
+
+<Storage name="Default">
+<Type>%Library.CacheStorage</Type>
+<DataLocation>^Demo.AddressBookEntryD</DataLocation>
+<DefaultData>AddressBookEntryDefaultData</DefaultData>
+<IdLocation>^Demo.AddressBookEntryD</IdLocation>
+<IndexLocation>^Demo.AddressBookEntryI</IndexLocation>
+<StreamLocation>^Demo.AddressBookEntryS</StreamLocation>
+<ExtentSize>10</ExtentSize>
+<Data name="AddressBookEntryDefaultData">
+<Value name="1">
+<Value>%%CLASSNAME</Value>
+</Value>
+<Value name="2">
+<Value>LastName</Value>
+</Value>
+<Value name="3">
+<Value>FirstName</Value>
+</Value>
+<Value name="4">
+<Value>Phone</Value>
+</Value>
+<Value name="5">
+<Value>Email</Value>
+</Value>
+<Value name="6">
+<Value>Twitter</Value>
+</Value>
+</Data>
+<Property name="%%CLASSNAME">
+<Selectivity>100.0000%</Selectivity>
+</Property>
+<Property name="Email">
+<Selectivity>10.0000%</Selectivity>
+</Property>
+<Property name="FirstName">
+<Selectivity>11.1111%</Selectivity>
+</Property>
+<Property name="LastName">
+<Selectivity>10.0000%</Selectivity>
+</Property>
+<Property name="Phone">
+<Selectivity>10.0000%</Selectivity>
+</Property>
+<Property name="Twitter">
+<Selectivity>10.0000%</Selectivity>
+</Property>
+<SQLMap name="IDKEY">
+<BlockCount>-4</BlockCount>
+</SQLMap>
+</Storage>
+</Class>
+
+
+<Class name="Demo.EnsLogService">
+<Super>%CSP.REST</Super>
+<TimeChanged>63253,56843.006822</TimeChanged>
+<TimeCreated>63253,36071.794237</TimeCreated>
+
+<XData name="UrlMap">
+<Data><![CDATA[
+<Routes>
+		<Route Url="/configNames" Method="GET" Call="configNames" />
+	  <Route Url="/logs/:configName" Method="GET" Call="logs"/>
+	  <Route Url="/addressBook" Method="GET" Call="addressBook"/>
+	  
+		<Route Url="/" Method="GET" Call="info" />
+	  
+</Routes>
+]]></Data>
+</XData>
+
+<Method name="addressBook">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+		try {
+	  do ..headers()
+
+		write !
+		set stream=##class(%Stream.TmpCharacter).%New()
+		set sql="select * from Demo.AddressBookEntry"
+		set rs=##class(%ZEN.Auxiliary.jsonSQLProvider).%WriteJSONStreamFromSQL(stream,sql)
+		do stream.Rewind()
+		while ( 'stream.AtEnd ) {
+			write stream.Read()
+		}
+		return $$$OK	
+	} catch error {
+		write error.DisplayString()
+		return error.AsStatus()
+	
+	}
+]]></Implementation>
+</Method>
+
+<Method name="info">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	write "Info"
+	return $$$OK
+]]></Implementation>
+</Method>
+
+<Method name="configNames">
+<ClassMethod>1</ClassMethod>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	try {
+	  do ..headers()
+
+		write !
+		set stream=##class(%Stream.TmpCharacter).%New()
+		set sql="select distinct ConfigName from Ens_Util.Log where ConfigName is not null"
+		set rs=##class(%ZEN.Auxiliary.jsonSQLProvider).%WriteJSONStreamFromSQL(stream,sql)
+		do stream.Rewind()
+		while ( 'stream.AtEnd ) {
+			write stream.Read()
+		}
+		return $$$OK	
+	} catch error {
+		write error.DisplayString()
+		return error.AsStatus()
+	
+	}
+]]></Implementation>
+</Method>
+
+<Method name="logs">
+<ClassMethod>1</ClassMethod>
+<FormalSpec>configName</FormalSpec>
+<ReturnType>%Status</ReturnType>
+<Implementation><![CDATA[
+	try {
+	  do ..headers()
+		write !
+		set stream=##class(%Stream.TmpCharacter).%New()
+		set cn=$zconvert(configName,"U")
+		if ( '$data(^Ens.Util.LogI("ConfigName"," "_cn) ) ) {
+			throw ##class(%Exception.General).%New("ng-error",,,"Invalid configName='"+configName+"'")
+		}
+		set sql="select * from Ens_Util.Log where ConfigName ='"_cn_"'"
+		set rs=##class(%ZEN.Auxiliary.jsonSQLProvider).%WriteJSONStreamFromSQL(stream,sql,,0)
+		do stream.Rewind()
+		while ( 'stream.AtEnd ) {
+			write stream.Read()
+		}
+		return $$$OK	
+	} catch error {
+		write error.DisplayString()
+		return error.AsStatus()
+	
+	}
+]]></Implementation>
+</Method>
+
+<Method name="headers">
+<ClassMethod>1</ClassMethod>
+<Implementation><![CDATA[
+	do %response.SetHeader("Access-Control-Allow-Origin","*")
+	do %response.SetHeader("Allow","HEAD,GET,PUT,DELETE,OPTIONS")
+]]></Implementation>
+</Method>
+</Class>
+
+
+<Routine name="EnsLib.HTTP.SimpleHttpd" type="MAC" languagemode="0" timestamp="63252,44157.49292"><![CDATA[
+listen(port=8888,break=0)	public {
+	set server="|TCP|"_port
+	open server:(/SEN=1:/NODELAY=1)	
+	while (1) {
+		use server read data
+		use 0 write data
+		break:break
+	}
+}
+]]></Routine>
+
+
+<Routine name="EnsLib.HTTP.shttpd" type="MAC" languagemode="0" timestamp="63252,44211.742377"><![CDATA[
+listen(port=8888,break=0)	public {
+	set server="|TCP|"_port
+	while (1) {
+  	open server:(/SEN=1:/NODELAY=1)	
+		use server read data
+		use 0 write data
+		break:break
+		use server write "OK",!,!,$ZTS
+		close server
+	}
+}
+]]></Routine>
+
+
 <Class name="EnsLib.ZenCloudMessaging.APNS.Operation">
 <Description>
 Interfaces with the Apple Push Notification Service</Description>
@@ -945,7 +1187,7 @@ This user callback method is called from %OnClose()</Description>
 Interfaces with the Google Cloud Messaging Service</Description>
 <IncludeCode>EnsZenCloudMessaging</IncludeCode>
 <Super>Ens.BusinessOperation</Super>
-<TimeChanged>63250,54369.322404</TimeChanged>
+<TimeChanged>63250,56737.925907</TimeChanged>
 <TimeCreated>63243,57688.148914</TimeCreated>
 
 <Property name="NotificationProtocol">
@@ -1071,7 +1313,7 @@ The access_token which we get some the refresh_token</Description>
 		
 		Do ..HttpRequest.EntityBody.Write(tPayload)
 		Do ..HttpRequest.EntityBody.Rewind()
-		
+		Set ..HttpRequest.Timeout=10		// Don't wait for 30 seconds, sometime google no respondo
 		Set tSC = ..HttpRequest.Post("/"_$P(..PushServer,"/",4,*))
 		$$$TRACE("Error codes back from POST to google: "_$system.Status.GetErrorCodes(tSC))
 		if ( $system.Status.GetErrorCodes(tSC) [ "5922" ) {
@@ -2776,8 +3018,11 @@ ExportProject(sourceDir="/Users/jmimick/work/gs2014/") Public {
 ]]></Routine>
 
 
-<Project name="MyZenCloudMessaging" LastModified="2014-03-04 10:42:50.924831">
+<Project name="MyZenCloudMessaging" LastModified="2014-03-07 15:45:48.805325">
   <Items>
+    <ProjectItem name="Demo.EnsLogService" type="CLS"></ProjectItem>
+    <ProjectItem name="EnsLib.HTTP.SimpleHttpd.MAC" type="MAC"></ProjectItem>
+    <ProjectItem name="EnsLib.HTTP.shttpd.MAC" type="MAC"></ProjectItem>
     <ProjectItem name="EnsLib.ZenCloudMessaging" type="PKG"></ProjectItem>
     <ProjectItem name="EnsZenCloudMessaging.INC" type="MAC"></ProjectItem>
     <ProjectItem name="EnsZenCloudMessagingEnsZenCloudMessagingErrors.INC" type="MAC"></ProjectItem>
@@ -2785,6 +3030,8 @@ ExportProject(sourceDir="/Users/jmimick/work/gs2014/") Public {
     <ProjectItem name="LoadZENCloudMessaging.MAC" type="MAC"></ProjectItem>
     <ProjectItem name="Test" type="PKG"></ProjectItem>
     <ProjectItem name="ZenCloudMessageDemo.MAC" type="MAC"></ProjectItem>
+    <ProjectItem name="shttpd.MAC" type="MAC"></ProjectItem>
+    <ProjectItem name="Demo.AddressBookEntry" type="CLS"></ProjectItem>
   </Items>
 </Project>
 
@@ -2796,7 +3043,7 @@ ExportProject(sourceDir="/Users/jmimick/work/gs2014/") Public {
 A test HTTP based production for ebXML</Description>
 <ProcedureBlock>1</ProcedureBlock>
 <Super>Ens.Production</Super>
-<TimeChanged>63250,50089.108238</TimeChanged>
+<TimeChanged>63252,39401.441379</TimeChanged>
 <TimeCreated>61185,56891.228831</TimeCreated>
 
 <XData name="ProductionDefinition">
@@ -2820,6 +3067,7 @@ A test HTTP based production for ebXML</Description>
   </Item>
   <Item Name="Test.ZenCloudMessaging.DeviceEndpoint" Category="" ClassName="Test.ZenCloudMessaging.DeviceEndpoint" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
     <Setting Target="Host" Name="AlertOnError">1</Setting>
+    <Setting Target="Adapter" Name="LocalInterface">127.0.0.1 (any IPv4)</Setting>
   </Item>
   <Item Name="Ens.Alert" Category="" ClassName="Test.ZenCloudMessaging.MasterNodeOperation" PoolSize="1" Enabled="true" Foreground="false" Comment="" LogTraceEvents="true" Schedule="">
     <Setting Target="Adapter" Name="HTTPPort">9990</Setting>
@@ -3612,10 +3860,13 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63250,56608.243087"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63251,65581.914982"><![CDATA[
 #Include %occInclude
 	;
-SystemReady(PublicDnsName)	public	{
+SystemReady(PublicDnsName="Foo")	public	{
+	// attempt to fetch PublicDnsName from amazon
+	set url="http://169.254.169.254/latest/meta-data/public-hostname"
+	set PublicDnsName=""
 	// register iPhone and Chrome App to subscribe
 	set Identifier="04403b764d776af3ea93da2faec714b3e10eb8cee8e4b72175405ba273b4b553"
 	set AppIdentifier="ZCMiOS"
@@ -3666,6 +3917,104 @@ Demo(AppToken="App1",NumberMessages=10)		public {
 }
 t1()	public {	
 	do Demo(,2)
+}
+]]></Routine>
+
+
+<Routine name="shttpd" type="MAC" languagemode="0" timestamp="63252,61871.035039"><![CDATA[
+listen(port=8888)	public {
+	set break=$get(^shttpd.break,0)=1
+	set server="|TCP|"_port
+	use 0 write "shttpd - Simple HTTPD listening on port "_port_" break="_break,!
+	try {
+		while (1) {
+  		open server:(/SEN=1:/NODELAY=1)	
+  		use 0 write "Waiting for new request:",!
+			use server read data
+			use 0 write "Got request:",!
+			use 0 write data,!
+			
+			if $piece(data," ",1)="OPTIONS" {
+				use 0 write "Got OPTIONS",!
+				do writeResponse($$respondOPTIONS(),server)
+			  close server 
+			} else {
+				do parse(data,break)
+				do writeResponse($$respondOK("OK"),server)
+				close server
+			}
+		}
+	} catch error {
+		//do writeResponse($$respondERROR(error.DisplayString()),server)
+		break
+		use 0 write "error:",error.DisplayString(),!
+		if ( error.Name="<READ>" ) {
+			close server
+			do listen(port)
+		}
+	} 
+	
+	close server
+	
+}
+ /*
+ 	Simple parse of HTTP request, extract out some JSON
+ 	in the request body
+	*/
+parse(data,break)	public  {
+	
+	for i=1:1:$length(data,$C(13,10)) {
+		// Look for Content-Length header
+		set line=$piece(data,$C(13,10),i)
+		
+		if $piece(line,":",1)="Content-Length" {
+			set length=$zstrip($piece(line,":",2),"*PCW")
+			set payload=$extract(data,$length(data)-length,$length(data))
+			quit		// we're done
+		}	
+	}
+	write "got payload:",payload,!
+	set sc=##class(%ZEN.Auxiliary.jsonProvider).%ConvertJSONToObject(payload,,.object)
+	zw object
+	break:break
+}
+respondOK(payload)	public {
+	
+	return $listbuild(
+		"HTTP/1.1 200 OK"
+		,"Allow: HEAD,GET,PUT,DELETE,OPTIONS"
+  	,"Access-Control-Allow-Origin : * "
+		,"Accept: */*"
+		,"Content-Type: application/json"
+		,"Content-Length: "_$length(payload)
+		,"Access-Control-Allow-Headers: access-control-allow-origin, accept, content-type"
+		,""
+		,payload
+		)
+}
+respondERROR(error) public {
+	return $listbuild(
+	"HTTP/1.1 500 ERROR"
+	,""
+	,error	
+	)
+}
+respondOPTIONS() 	public {
+	return $listbuild(
+		"HTTP/1.1 200 OK"
+		,"Allow: HEAD,GET,PUT,DELETE,OPTIONS"
+  	,"Access-Control-Allow-Origin : * "
+		,"Accept: */*"
+		,"Content-Type: application/json"
+		,"Access-Control-Allow-Headers: access-control-allow-origin, accept, content-type"
+		,""
+		)
+}
+writeResponse(response,device)	public {
+	set LF=$C(13,10)
+	for i=1:1:$listlength(response) {
+		use device write $list(response,i),LF
+	}
 }
 ]]></Routine>
 </Export>
