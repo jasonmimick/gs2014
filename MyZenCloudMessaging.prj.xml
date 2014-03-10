@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-10 11:16:36">
+<Export generator="Cache" version="25" zv="Cache for UNIX (Apple Mac OS X for x86-64) 2014.1 (Build 597U)" ts="2014-03-10 11:50:50">
 <Class name="Demo.AddressBookEntry">
 <Description>
 Sample address book entry</Description>
@@ -3860,7 +3860,7 @@ This should usually be the EnsLib.ZenCloudMessaging.IdentityManager.Process</Des
 </Class>
 
 
-<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63256,40525.265858"><![CDATA[
+<Routine name="ZenCloudMessageDemo" type="MAC" languagemode="0" timestamp="63256,42526.730628"><![CDATA[
 #Include %occInclude
 	;
 SystemReady(PublicDnsName="Foo")	public	{
@@ -3872,7 +3872,7 @@ SystemReady(PublicDnsName="Foo")	public	{
 			set ipreq.Server="169.254.169.254"
 			do ipreq.Get("/latest/meta-data/public-hostname")
 			set ip=""
-			while ( 'ipreq.HttpResponse.AtEnd ) {
+			while ( 'ipreq.HttpResponse.Data.AtEnd ) {
 				set ip=ipreq.HttpResponse.Data.Read()		
 			}
 			set PublicDnsName=ip
