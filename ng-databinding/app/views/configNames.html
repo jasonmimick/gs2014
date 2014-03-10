@@ -1,0 +1,14 @@
+<div>
+  Search: <input type="text" ng-model="searchText" />
+  {{ searchText }}
+  <br/>
+  <h3>Available ConfigNames</h3>
+   <table>
+    <tr ng-repeat="config in configNames.children |  filter:searchText | orderBy:'ConfigName'">
+	  <td>
+	    <a href="#/logs/{{ config.ConfigName }}">{{ config.ConfigName  }}</a>
+	  </td>
+    </tr>
+  </table>
+</div>
+

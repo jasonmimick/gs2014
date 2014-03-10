@@ -1,0 +1,25 @@
+<h4>Address Book</h4>
+<a href="#/">Back to ConfigNames</a>
+<br/>
+Search: <input type="text" ng-model="searchText" />
+<br />
+
+<table class="centered">
+  <tr>
+	<th>LastName</th>
+    <th>FirstName</th>
+	<th>Phone</th>
+	<th>Email</th>
+	<th>Twitter</th>
+  </tr>
+   <tr ng-repeat="address in addressBook.children | filter:searchText | orderBy:'LastName'">
+            <td>{{ address.LastName }}</td>
+            <td>{{ address.FirstName }}</td>
+            <td>{{ address.Phone }}</td>
+            <td>{{ address.Email}}</td>
+            <td>{{ address.Twitter }}</td>
+        </tr>
+</table>
+
+<br />
+

@@ -1,0 +1,119 @@
+<!--
+   JSON/REST/AngularJS with Ensemble
+
+   This demonstration app shows how to consume
+   JSON data from Ensemble.
+
+   InterSystems Global Summit 2014
+   jmimick@intersystems.com
+
+   Respectfully modified and inspired by the excellect talk:
+   AngularJS in 20-ish Minutes
+   Dan Wahlin
+   http://www.youtube.com/watch?v=tnXO-i7944M
+
+-->
+<!DOCTYPE html>
+<html ng-app="demoApp">
+<head>
+	<title>Ensemble/Angular App</title>
+	<style>
+	body { font-family: arial; }
+	table {
+		margin: auto;
+    	border-collapse: separate;
+    	border-spacing: 0 1em;
+	}
+	table.centered td { 
+		text-align: center; 
+	}
+	</style>
+</head>
+<body>
+    <h1>JSON: The Glue Between Client and Server</h1>
+	<p>A demonstration of using JSON to transmit data between a client and server</p>
+	<a href="#/addressBook">Address Book Demo</a><br/>
+    <div ng-view></div>
+    
+    <script src="js/angular.min.js"></script>
+    <script src="js/angular-route.js"></script>
+    <script>
+        var app = angular.module('demoApp',['ngRoute']);
+        
+        app.config(function($routeProvider) {
+            $routeProvider.when('/',
+            {
+                controller: 'ConfigNamesController',
+                templateUrl: 'app/views/configNames.html'
+            })
+            .when('/logs/:configName',
+            {
+                controller: 'LogsController',
+                templateUrl: 'app/views/logs.html'
+            })
+			.when('/addressBook',
+			{
+				controller: 'AddressBookController',
+				templateUrl: 'app/views/addressbook.html'
+			});
+        });
+        
+        app.controller('ConfigNamesController', function($scope, configNamesFactory) {
+            $scope.configNames = null;
+            
+            function init() {
+                configNamesFactory.getConfigNames().success(function(data) {
+                    $scope.configNames = data;
+                }).error(function(data) {
+					console.dir('configNamesFactory error!');
+				});
+            }
+            
+            init();
+        });
+        
+        app.controller('LogsController', function($scope, $routeParams, logsFactory) {
+            $scope.configName = $routeParams.configName;
+            function init() {
+                logsFactory.getLogs($scope.configName).success(function(data) {
+                    $scope.logs = data;
+                }).error(function(data) {
+					debugger;
+				});
+            }
+            
+            init();
+ });
+        
+		app.controller('AddressBookController', function($scope, addressBookFactory) {
+			function init() {
+				addressBookFactory.getBook().success(function(data) {
+					$scope.addressBook = data;
+				});
+			}
+			init();
+		});
+        app.factory('configNamesFactory', function($http) { 
+            var factory = {};
+            factory.getConfigNames = function() {
+                return $http.get('http://localhost:57774/ng/configNames');
+            };
+            return factory;
+        });
+        app.factory('logsFactory', function($http) { 
+            var factory = {};
+            factory.getLogs = function(cn) {
+                return $http.get('http://localhost:57774/ng/logs/'+cn);
+            };
+            return factory;
+        });
+       app.factory('addressBookFactory', function($http) {
+			var factory = {};
+			factory.getBook = function() {
+				return $http.get('http://localhost:57774/ng/addressBook');
+			};
+			return factory;
+		}); 
+    </script>
+</body>
+</html>

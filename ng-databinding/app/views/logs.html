@@ -1,0 +1,20 @@
+<h4>Ensemble Event Logs for {{ configName }} ({{ logs.children.length }})</h4>
+<a href="#/">Back to ConfigNames</a>
+<br/>
+Search Log: <input type="text" ng-model="searchText" />
+<br />
+<table>
+  <tr>
+	<th>TimeLogged</th>
+    <th>MessageId</th>
+	<th>Text</th>
+  </tr>
+   <tr ng-repeat="log in logs.children | filter:searchText | orderBy:'TimeLogged'">
+            <td>{{ log.TimeLogged }}</td>
+            <td>{{ log.MessageId }}</td>
+            <td>{{ log.Text }}</td>
+        </tr>
+</table>
+
+<br />
+
